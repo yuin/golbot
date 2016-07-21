@@ -104,7 +104,7 @@ end
 
 function http(r)                                           -- 12
   if method == "POST" and url.path == "/privmsg" then
-    local msg = json.decode(reader())
+    local msg = json.decode(r:readbody())
     local ok, success = requestmain({type="PRIVMSG", channel=msg.channel, message=msg.message, result=result})   -- 13
     if ok and success then
       return 200,

@@ -3,25 +3,23 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
+
 	"github.com/cihub/seelog"
 	"github.com/cjoudrey/gluahttp"
 	"github.com/kohkimakimoto/gluafs"
 	luajson "github.com/layeh/gopher-json"
 	"github.com/layeh/gopher-luar"
 	"github.com/otm/gluash"
-	"github.com/thoj/go-ircevent"
 	"github.com/yuin/charsetutil"
 	"github.com/yuin/gluare"
 	"github.com/yuin/gopher-lua"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"net/url"
-	"os"
-	"reflect"
-	"strings"
-	"sync"
-	"time"
 )
 
 const defaultConfigLua string = `local golbot = require("golbot")
@@ -174,6 +172,10 @@ func toCamel(s string) string {
 	return strings.Replace(strings.Title(strings.Replace(s, "_", " ", -1)), " ", "", -1)
 }
 
+type chatClient interface {
+	Logger() *log.Logger
+}
+
 type luaLogger struct {
 	L  *lua.LState
 	fn *lua.LFunction
@@ -272,18 +274,18 @@ func proxyLuar(L *lua.LState, tp interface{}, methods func(*lua.LState, string) 
 func nullProxy(L *lua.LState, key string) bool { return false }
 
 type httpHandler struct {
-	ircobj *irc.Connection
+	client chatClient
 	conf   string
 }
 
 func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.ircobj.Log.Printf("[INFO] HTTP %s %s %s %s ", r.RemoteAddr, r.Method, r.RequestURI, r.Proto)
+	h.client.Logger().Printf("[INFO] HTTP %s %s %s %s ", r.RemoteAddr, r.Method, r.RequestURI, r.Proto)
 	L := newLuaState(h.conf)
 	defer L.Close()
 	pushN(L, L.GetGlobal("http"), luar.New(L, r))
 	err := L.PCall(1, 3, nil)
 	if err != nil {
-		h.ircobj.Log.Printf("[ERROR] %s", err.Error())
+		h.client.Logger().Printf("[ERROR] %s", err.Error())
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	} else {
 		L.CheckTable(-2).ForEach(func(k, v lua.LValue) {
@@ -297,27 +299,32 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func newLuaState(conf string) *lua.LState {
 	L := lua.NewState()
+	var client chatClient
 	nworker := 3
 	httpaddr := ""
+
 	mod := L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
 		"newbot": func(L *lua.LState) int {
-			// typ := L.CheckString(1)
-			ircobj := irc.IRC(L.CheckString(2), L.CheckString(3))
+			nick := L.CheckString(2)
+			user := L.CheckString(3)
 			opt := L.OptTable(4, L.NewTable())
-
-			ircobj.UseTLS = lua.LVAsBool(L.GetField(opt, "useTLS"))
-			if s, ok := getStringField(L, opt, "password"); ok {
-				ircobj.Password = s
-			}
+			var logger *log.Logger
 			switch v := L.GetField(opt, "log").(type) {
 			case *lua.LFunction:
-				ircobj.Log = log.New(&luaLogger{L, v}, "", log.LstdFlags)
+				logger = log.New(&luaLogger{L, v}, "", log.LstdFlags)
 			case *lua.LTable:
-				logger, err := seelog.LoggerFromConfigAsString(luaToXml(v))
+				l, err := seelog.LoggerFromConfigAsString(luaToXml(v))
 				if err != nil {
 					L.RaiseError(err.Error())
 				}
-				ircobj.Log = log.New(&seelogLogger{logger}, "", 0)
+				logger = log.New(&seelogLogger{l}, "", 0)
+			}
+
+			switch L.CheckString(1) {
+			case "IRC":
+				client = newIRCBot(L, nick, user, logger, opt)
+			default:
+				L.RaiseError("unknown chat type: %s", L.ToString(1))
 			}
 			if n, ok := getNumberField(L, opt, "worker"); ok {
 				nworker = int(n)
@@ -325,7 +332,6 @@ func newLuaState(conf string) *lua.LState {
 			if s, ok := getStringField(L, opt, "http"); ok {
 				httpaddr = s
 			}
-			L.Push(luar.New(L, ircobj))
 			return 1
 		},
 		"newlogger": func(L *lua.LState) int {
@@ -339,77 +345,19 @@ func newLuaState(conf string) *lua.LState {
 	})
 	L.SetField(mod, "cmain", lua.LChannel(luaMainChan))
 	L.SetField(mod, "cworker", lua.LChannel(luaWorkerChan))
-	proxyLuar(L, irc.Connection{}, func(L *lua.LState, key string) bool {
-		switch key {
-		case "on":
-			L.Push(L.NewFunction(func(L *lua.LState) int {
-				self := L.CheckUserData(1).Value.(*irc.Connection)
-				fn := L.CheckFunction(3)
-				self.AddCallback(L.CheckString(2), func(e *irc.Event) {
-					mutex.Lock()
-					defer mutex.Unlock()
-					pushN(L, fn, luar.New(L, e))
-					L.PCall(1, 0, nil)
-				})
-				return 0
-			}))
-		case "serve":
-			L.Push(L.NewFunction(func(L *lua.LState) int {
-				irc := L.CheckUserData(1).Value.(*irc.Connection)
-				v := reflect.ValueOf(*irc)
-				for i := 0; i < nworker; i++ {
-					irc.Log.Printf("spawn worker\n")
-					go func() {
-						L := newLuaState(conf)
-						for !v.FieldByName("quit").Bool() {
-							pushN(L, L.GetGlobal("worker"), <-luaWorkerChan)
-							L.PCall(1, 0, nil)
-						}
-					}()
-				}
-				if httpaddr != "" {
-					server := &http.Server{
-						Addr:    httpaddr,
-						Handler: &httpHandler{irc, conf},
-					}
-					irc.Log.Printf("http server started on %s", httpaddr)
-					go server.ListenAndServe()
-				}
-
-				fn := L.OptFunction(2, L.NewFunction(func(L *lua.LState) int { return 0 }))
-				errChan := irc.ErrorChan()
-				for !v.FieldByName("quit").Bool() {
-					select {
-					case err := <-errChan:
-						irc.Log.Printf("Error, disconnected: %s\n", err)
-						for !v.FieldByName("quit").Bool() {
-							if err = irc.Reconnect(); err != nil {
-								irc.Log.Printf("Error while reconnecting: %s\n", err)
-								time.Sleep(60 * time.Second)
-							} else {
-								errChan = irc.ErrorChan()
-								break
-							}
-						}
-					case msg := <-luaMainChan:
-						func() {
-							mutex.Lock()
-							defer mutex.Unlock()
-							pushN(L, fn, msg)
-							L.PCall(1, 0, nil)
-						}()
-					}
-				}
-				return 0
-			}))
-		default:
-			return false
-
+	startHttpServer := func() {
+		if httpaddr != "" {
+			server := &http.Server{
+				Addr:    httpaddr,
+				Handler: &httpHandler{client, conf},
+			}
+			client.Logger().Printf("http server started on %s", httpaddr)
+			go server.ListenAndServe()
 		}
-		return true
-	})
+	}
+	newIRCLuaState(L, conf, nworker, startHttpServer)
+
 	proxyLuar(L, log.Logger{}, nullProxy)
-	proxyLuar(L, irc.Event{}, nullProxy)
 	proxyLuar(L, url.Values{}, nullProxy)
 	proxyLuar(L, url.Userinfo{}, nullProxy)
 	proxyLuar(L, url.URL{}, nullProxy)
@@ -435,7 +383,6 @@ func newLuaState(conf string) *lua.LState {
 		L.Push(mod)
 		return 1
 	})
-
 	L.PreloadModule("charset", func(L *lua.LState) int {
 		L.Push(L.SetFuncs(L.NewTable(), charsetMod))
 		return 1

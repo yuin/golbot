@@ -97,9 +97,9 @@ function worker(msg)
   notifymain({type="PRIVMSG", channel=msg.channel, message="accepted"})
 end
 
-function http(method, url, reader)
-  if method == "POST" and url.path == "/privmsg" then
-    local msg = json.decode(reader())
+function http(r)
+  if r.method == "POST" and r.URL.path == "/privmsg" then
+    local msg = json.decode(r:readbody())
     local ok, success = requestmain({type="PRIVMSG", channel=msg.channel, message=msg.message, result=result})
     if ok and success then
       return 200,
@@ -280,17 +280,8 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.ircobj.Log.Printf("[INFO] HTTP %s %s %s %s ", r.RemoteAddr, r.Method, r.RequestURI, r.Proto)
 	L := newLuaState(h.conf)
 	defer L.Close()
-	pushN(L, L.GetGlobal("http"), lua.LString(r.Method), luar.New(L, r.URL),
-		L.NewFunction(func(L *lua.LState) int {
-			b, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				pushN(L, lua.LNil, lua.LString(err.Error()))
-				return 2
-			}
-			pushN(L, lua.LString(b))
-			return 1
-		}))
-	err := L.PCall(3, 3, nil)
+	pushN(L, L.GetGlobal("http"), luar.New(L, r))
+	err := L.PCall(1, 3, nil)
 	if err != nil {
 		h.ircobj.Log.Printf("[ERROR] %s", err.Error())
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -422,6 +413,23 @@ func newLuaState(conf string) *lua.LState {
 	proxyLuar(L, url.Values{}, nullProxy)
 	proxyLuar(L, url.Userinfo{}, nullProxy)
 	proxyLuar(L, url.URL{}, nullProxy)
+	proxyLuar(L, http.Cookie{}, nullProxy)
+	proxyLuar(L, http.Request{}, func(L *lua.LState, key string) bool {
+		if key == "readbody" || key == "ReadBody" {
+			L.Push(L.NewFunction(func(L *lua.LState) int {
+				r := L.CheckUserData(1).Value.(*http.Request)
+				b, err := ioutil.ReadAll(r.Body)
+				if err != nil {
+					pushN(L, lua.LNil, lua.LString(err.Error()))
+					return 2
+				}
+				pushN(L, lua.LString(b))
+				return 1
+			}))
+			return true
+		}
+		return false
+	})
 
 	L.PreloadModule("golbot", func(L *lua.LState) int {
 		L.Push(mod)

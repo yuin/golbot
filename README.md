@@ -102,7 +102,7 @@ function worker(msg)                                                    -- 10
   notifymain({type="PRIVMSG", channel=msg.channel, message="accepted"}) -- 11
 end
 
-function http(method, url, reader)                         -- 12
+function http(r)                                           -- 12
   if method == "POST" and url.path == "/privmsg" then
     local msg = json.decode(reader())
     local ok, success = requestmain({type="PRIVMSG", channel=msg.channel, message=msg.message, result=result})   -- 13
@@ -235,12 +235,10 @@ end
 If the `http` global function exists in the `golbot.lua`, REST API feature will be enabled.
 
 ```lua
-function http(method, url, reader)
-  if method == "POST" and url.path == "/privmsg" then
-    local msg = json.decode(reader())
-    local result = channel.make()
-    tomain({type="PRIVMSG", channel=msg.channel, message=msg.message, result=result})
-    local ok, success = result:receive()
+function http(r)
+  if r.method == "POST" and r.URL.path == "/privmsg" then
+    local msg = json.decode(r:readbody())
+    local ok, success = requestmain({type="PRIVMSG", channel=msg.channel, message=msg.message, result=result})
     if ok and success then
       return 200,
              {
@@ -263,11 +261,7 @@ function http(method, url, reader)
 end
 ```
 
-`http` function receives 3 arguments:
-
-- method:string : HTTP Method as an upper case string.
-- url : `net/url#URL` object wrapped by `gopher-luar`.
-- reader : a function that returns body of the request.
+`http` function receives `net/http#Request` object wrapped by `gopher-luar` .
 
 `http` function must return 3 objects:
 

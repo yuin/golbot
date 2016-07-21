@@ -9,6 +9,7 @@ Options:
   -i : ignore build errors
   -b : branch(default : master)
   -s : install std
+  -u : upload only
 EOF
   exit 1
 }
@@ -52,6 +53,7 @@ cd "${SCRIPT_DIR}"
 : ${IGNORE_BUILD_ERROR:=0}
 : ${BRANCH:="master"}
 : ${INSTALL_STD:=0}
+: ${UPLOAD_ONLY:=0}
 
 while : ; do
   case "${1}" in
@@ -59,6 +61,9 @@ while : ; do
     [[ "$1" =~ "h" ]] && show-usage
     if [[ "$1" =~ "i" ]]; then
       IGNORE_BUILD_ERROR=1
+      shift 1
+    elif [[ "$1" =~ "u" ]]; then
+      UPLOAD_ONLY=1
       shift 1
     elif [[ "$1" =~ "s" ]]; then
       INSTALL_STD=1
@@ -127,25 +132,27 @@ if [ ${INSTALL_STD} = 1 ]; then
   done
 fi
 
-print-msg I "tag: ${RELEASE_TAG}"
-_OLD_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [ "${_OLD_BRANCH}" != "${BRANCH}" ]; then
-  print-msg I "git checkout ${BRANCH}"
-  git checkout ${BRANCH}
-  [ $? -ne 0 ] && abort "Failed to checkout ${BRANCH}"
+if [ ${UPLOAD_ONLY} -eq 0 ]; then
+  print-msg I "tag: ${RELEASE_TAG}"
+  _OLD_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  if [ "${_OLD_BRANCH}" != "${BRANCH}" ]; then
+    print-msg I "git checkout ${BRANCH}"
+    git checkout ${BRANCH}
+    [ $? -ne 0 ] && abort "Failed to checkout ${BRANCH}"
+  fi
+  
+  if [ "${RELEASE_TAG}" != "snapshot" ]; then
+    print-msg I git checkout refs/tags/${RELEASE_TAG}
+    git checkout refs/tags/${RELEASE_TAG}
+    [ $? -ne 0 ] && abort "Failed to checkout the tag ${RELEASE_TAG}"
+  fi
+  
+  rm -rf "${SCRIPT_DIR}/packages"
+  
+  print-msg I "gox -output=${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -ldflags="-s"
+  env CGO_ENABLED=0 gox -output="${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -ldflags="-s"
+  handle-build-result $?
 fi
-
-if [ "${RELEASE_TAG}" != "snapshot" ]; then
-  print-msg I git checkout refs/tags/${RELEASE_TAG}
-  git checkout refs/tags/${RELEASE_TAG}
-  [ $? -ne 0 ] && abort "Failed to checkout the tag ${RELEASE_TAG}"
-fi
-
-rm -rf "${SCRIPT_DIR}/packages"
-
-print-msg I "gox -output=${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -ldflags="-s"
-env CGO_ENABLED=0 gox -output="${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -ldflags="-s"
-handle-build-result $?
 
 _NUM_THREADS=${CPU_NUM}
 if [ -z "${CPU_NUM}" -o ${CPU_NUM} -lt 4 ]; then
@@ -157,10 +164,12 @@ ghr --parallel=${_NUM_THREADS} --delete --token=${GITHUB_TOKEN} ${RELEASE_TAG} p
 [ $? -ne 0 ] && abort "Failed to upload some packages"
 print-msg W "All packages have been uploaded successfully" CYAN
 
-if [ "${_OLD_BRANCH}" != "${BRANCH}" ]; then
-  print-msg I "git checkout ${_OLD_BRANCH}"
-  git checkout ${_OLD_BRANCH}
-  [ $? -ne 0 ] && abort "Failed to checkout ${_OLD_BRANCH}"
+if [ ${UPLOAD_ONLY} -eq 0 ]; then
+  if [ "${_OLD_BRANCH}" != "${BRANCH}" ]; then
+    print-msg I "git checkout ${_OLD_BRANCH}"
+    git checkout ${_OLD_BRANCH}
+    [ $? -ne 0 ] && abort "Failed to checkout ${_OLD_BRANCH}"
+  fi
 fi
 
 print-msg I "OK" CYAN

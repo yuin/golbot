@@ -23,7 +23,7 @@ golbot run
 
 golbot uses [go-ircevent](https://github.com/thoj/go-ircevent) as an IRC client, [GopherLua](https://github.com/yuin/gopher-lua) as a Lua script runtime, and [gopher-luar](https://github.com/layeh/gopher-luar) as a data converter between Go and Lua.
 
-`irc.newbot` creates new `*irc.Connection` (in `go-ircevent`)  object wrapped by gopher-luar, so you can call same methods as `go-ircevent` .
+`golbot.newbot` creates new `*irc.Connection` (in `go-ircevent`)  object wrapped by gopher-luar, so you can call same methods as `go-ircevent` .
 
 
 Here is a default config script :
@@ -151,10 +151,10 @@ end
 
 ## Logging
 
-golbot is integrated with [seelog](https://github.com/cihub/seelog) . `irc.newlog(tbl)` creates a new logger that has a `printf` method.
+golbot is integrated with [seelog](https://github.com/cihub/seelog) . `golbot.newlog(tbl)` creates a new logger that has a `printf` method.
 
 ```lua
-  log = irc.newlog(conf)
+  log = golbot.newlog(conf)
   log:printf("[info] msg")
 ```
 

@@ -96,7 +96,7 @@ end
 function http(r)
   if r.method == "POST" and r.URL.path == "/say" then
     local msg = json.decode(r:readbody())
-    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message, result=result})
+    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message})
     if ok and success then
       return 200,
              {

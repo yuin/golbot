@@ -15,7 +15,7 @@ go get github.com/yuin/golbot
 ## Getting started
 
 ```bash
-golbot init
+golbot init # golbot.lua will be generated
 golbot run
 ```
 
@@ -216,7 +216,7 @@ Consider, for example, the case of deploying web applications when receives a sp
   end)
 ```
 
-`do_deploy()` may takes a minute, main goroutine is locked all the time. For avoiding this, `do_deploy` should be executed in worker goroutines via messaging(internally, golbot use Go channels).
+`do_deploy()` may takes a minute, main goroutine is locked all the time. For avoiding this, `do_deploy` should be executed in worker goroutines via messaging(internally, golbot uses Go channels).
 
 ```lua
 function main()
@@ -255,7 +255,7 @@ If the `http` global function exists in the `golbot.lua`, REST API feature will 
 function http(r)
   if r.method == "POST" and r.URL.path == "/say" then
     local msg = json.decode(r:readbody())
-    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message, result=result})
+    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message})
     if ok and success then
       return 200,
              {

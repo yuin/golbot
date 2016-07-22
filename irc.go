@@ -50,6 +50,8 @@ func (client *ircChatClient) On(L *lua.LState, action string, fn *lua.LFunction)
 func (client *ircChatClient) Respond(L *lua.LState, pattern string, fn *lua.LFunction) {
 	re := regexp.MustCompile(pattern)
 	client.ircobj.AddCallback("PRIVMSG", func(e *irc.Event) {
+		mutex.Lock()
+		defer mutex.Unlock()
 		matches := re.FindAllStringSubmatch(e.Message(), -1)
 		if len(matches) != 0 {
 			pushN(L, fn, luar.New(L, matches[0]), luar.New(L, NewMessageEvent(e.Nick, e.Arguments[0], e.Message(), e)))

@@ -9,7 +9,6 @@ import (
 type ChatClient interface {
 	Logger() *log.Logger
 	Say(target, message string)
-	Connect(connspec string) error
 	On(L *lua.LState, action string, fn *lua.LFunction)
 	Respond(L *lua.LState, pattern string, fn *lua.LFunction)
 	Serve(L *lua.LState, fn *lua.LFunction)
@@ -74,7 +73,6 @@ var chatClientMethods = map[string]lua.LGFunction{
 	"on":      chatClientOn,
 	"respond": chatClientRespond,
 	"serve":   chatClientServe,
-	"connect": chatClientConnect,
 }
 
 func chatClientSay(L *lua.LState) int {
@@ -95,13 +93,4 @@ func chatClientRespond(L *lua.LState) int {
 func chatClientServe(L *lua.LState) int {
 	checkChatClientG(L).Serve(L, L.CheckFunction(2))
 	return 0
-}
-
-func chatClientConnect(L *lua.LState) int {
-	if err := checkChatClientG(L).Connect(L.CheckString(2)); err != nil {
-		pushN(L, lua.LNil, lua.LString(err.Error()))
-		return 2
-	}
-	L.Push(lua.LTrue)
-	return 1
 }

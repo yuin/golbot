@@ -17,6 +17,7 @@ var ircChatClientTypeName = "ircChatClient"
 type ircChatClient struct {
 	ircobj       *irc.Connection
 	commonOption *CommonClientOption
+	conn         string
 }
 
 func (client *ircChatClient) Logger() *log.Logger {
@@ -25,17 +26,6 @@ func (client *ircChatClient) Logger() *log.Logger {
 
 func (client *ircChatClient) Say(target, message string) {
 	client.ircobj.Privmsg(target, message)
-}
-
-func (client *ircChatClient) Connect(conspec string) error {
-	parts := strings.Split(conspec, ",")
-	if err := client.ircobj.Connect(parts[0]); err != nil {
-		return err
-	}
-	for i := 1; i < len(parts); i++ {
-		client.ircobj.Join(parts[i])
-	}
-	return nil
 }
 
 func (client *ircChatClient) On(L *lua.LState, action string, fn *lua.LFunction) {
@@ -64,6 +54,16 @@ func (client *ircChatClient) Respond(L *lua.LState, pattern string, fn *lua.LFun
 
 func (client *ircChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 	irc := client.ircobj
+	if len(irc.Server) == 0 {
+		parts := strings.Split(client.conn, ",")
+		if err := irc.Connect(parts[0]); err != nil {
+			L.RaiseError(err.Error())
+		}
+		for i := 1; i < len(parts); i++ {
+			irc.Join(parts[i])
+		}
+	}
+
 	v := reflect.ValueOf(*irc)
 	for i := 0; i < client.commonOption.NumWorkers; i++ {
 		irc.Log.Printf("spawn worker\n")
@@ -108,8 +108,10 @@ func registerIRCChatClientType(L *lua.LState) {
 	proxyLuar(L, irc.Event{}, nil)
 }
 
-func newIRCChatClient(L *lua.LState, nick, user string, co *CommonClientOption, opt *lua.LTable) ChatClient {
+func newIRCChatClient(L *lua.LState, nick, user string, co *CommonClientOption, opt *lua.LTable) {
 	ircobj := irc.IRC(nick, user)
+	chatClient := &ircChatClient{ircobj, co, ""}
+
 	if co.Logger != nil {
 		ircobj.Log = co.Logger
 	}
@@ -117,7 +119,8 @@ func newIRCChatClient(L *lua.LState, nick, user string, co *CommonClientOption, 
 	if s, ok := getStringField(L, opt, "password"); ok {
 		ircobj.Password = s
 	}
-	chatClient := &ircChatClient{ircobj, co}
+	if s, ok := getStringField(L, opt, "conn"); ok {
+		chatClient.conn = s
+	}
 	L.Push(newChatClient(L, ircChatClientTypeName, chatClient, luar.New(L, ircobj).(*lua.LUserData)))
-	return chatClient
 }

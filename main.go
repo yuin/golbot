@@ -44,6 +44,7 @@ function main()
   })
 
   local bot = golbot.newbot("IRC", mynick, myname, {
+    conn = "localhost:6667,#test",
     useTLS = false,
     password = "password",
     worker = 3,
@@ -59,8 +60,6 @@ function main()
       }
     }
   })
-
-  assert(bot:connect("localhost:6667,#test"))
 
   bot:respond([[\s*(\d+)\s*\+\s*(\d+)\s*]], function(m, e)
     bot:say(e.target, tostring(tonumber(m[2]) + tonumber(m[3])))

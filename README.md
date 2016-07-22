@@ -47,6 +47,7 @@ function main()
   })
 
   local bot = golbot.newbot("IRC", mynick, myname, {       -- 2
+    conn = "localhost:6667,#test",
     useTLS = false,
     password = "password",
     worker = 3,
@@ -63,13 +64,11 @@ function main()
     }
   })
 
-  assert(bot:connect("localhost:6667,#test"))              -- 3
-
-  bot:respond([[\s*(\d+)\s*\+\s*(\d+)\s*]], function(m, e) -- 4
+  bot:respond([[\s*(\d+)\s*\+\s*(\d+)\s*]], function(m, e) -- 3
     bot:say(e.target, tostring(tonumber(m[2]) + tonumber(m[3])))
   end)
 
-  bot:on("PRIVMSG", function(e)                            -- 5
+  bot:on("PRIVMSG", function(e)                            -- 4
     local ch = e.arguments[1]
     local nick = e.nick
     local user = e.user
@@ -80,26 +79,26 @@ function main()
     end
 
     msglog:printf("%s\t%s\t%s", ch, source, msg)
-    bot.raw:privmsg(ch, msg)                               -- 6
-    notifywoker({channel=ch, message=msg, nick=nick})      -- 7
+    bot.raw:privmsg(ch, msg)                               -- 5
+    notifywoker({channel=ch, message=msg, nick=nick})      -- 6
   end)
 
-  bot:serve(function(msg)                                  -- 8
+  bot:serve(function(msg)                                  -- 7
     if msg.type == "say" then
       bot:say(msg.channel, msg.message)
-      respond(msg, true)                                   -- 9
+      respond(msg, true)                                   -- 8
     end
   end)
 end
 
-function worker(msg)                                       -- 10
-  notifymain({type="say", channel=msg.channel, message="accepted"}) -- 11
+function worker(msg)                                       -- 9
+  notifymain({type="say", channel=msg.channel, message="accepted"}) -- 10
 end
 
-function http(r)                                           -- 12
+function http(r)                                           -- 11
   if r.method == "POST" and r.URL.path == "/say" then
     local msg = json.decode(r:readbody())
-    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message, result=result}) -- 13
+    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message, result=result}) -- 12
     if ok and success then
       return 200,
              {
@@ -134,10 +133,8 @@ end
                 - `function` : function to log system messages( `function(msg:string) end` )
                 - `table` : [seelog](https://github.com/cihub/seelog) XML configuration as a lua table to log system messages
             - `http` : Address with port for binding HTTP REST API server
-        - `userTLS` and `password` are IRC specific options
-- 3. connects to the server.
-    - `#1` : procotol specific connection spec
-- 4. adds a callback that will be called when bot receives a message.
+        - `conn`, `userTLS` and `password` are IRC specific options
+- 3. adds a callback that will be called when bot receives a message.
     - `#1` : regular expression(this value will be evaluated by Go's regexp package)
     - `#2` : callback function
         - `m(table)` : captured groups as a list of strings.
@@ -146,19 +143,19 @@ end
             - `from(string)`
             - `message(string)`
             - `raw(object)`: underlying procotol specific object
-- 5. adds a callback for procotol specific events.
+- 4. adds a callback for procotol specific events.
     - `#1` : event name
     - `#2` : callback function
         - `e(object)` : procotol specific event object
-- 6. calls underlying procotol specific client methods.
-- 7. sends a message to the worker goroutines.
-- 8. starts main goroutine.
+- 5. calls underlying procotol specific client methods.
+- 6. sends a message to the worker goroutines.
+- 7. starts main goroutine.
     - `#1` : callback function that will be called when messages are sent by worker goroutines.  The callback function that will be called when messages are sent by main gorougine.
-- 9. responds to the message from other goroutines.
-- 10. a function that will be executed in worker goroutines.
-- 11. sends a message to the main goroutine.
-- 12. a function that will be executed when http requests are arrived.
-- 13. sends a message to the main goroutine and receives a result from the main goroutine.
+- 8. responds to the message from other goroutines.
+- 9. a function that will be executed in worker goroutines.
+- 10. sends a message to the main goroutine.
+- 11. a function that will be executed when http requests are arrived.
+- 12. sends a message to the main goroutine and receives a result from the main goroutine.
 
 ## IRC 
 
@@ -168,6 +165,7 @@ golbot uses [go-ircevent](https://github.com/thoj/go-ircevent) as an IRC client,
 - Protocol specific event object has same method as `*irc.Event`
 - Protocol specific event names are same as first argument of `*irc.Connection#AddCallback` .
 - Protocol specific options for `golbot.newbot` are:
+    - `conn(string)` : `"host:port,#channel,#channel..."`
     - `useTLS(bool)`
     - `password(string)`
 

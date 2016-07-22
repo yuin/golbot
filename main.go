@@ -375,8 +375,8 @@ Commands:
 		os.Exit(0)
 	}
 
-	luaMainChan = make(chan lua.LValue, 1)
-	luaWorkerChan = make(chan lua.LValue, 1)
+	luaMainChan = make(chan lua.LValue)
+	luaWorkerChan = make(chan lua.LValue)
 	luaWorkerQuitChan = make(chan bool)
 	mainL := newLuaState(optConfFile)
 	mainL.Push(mainL.GetGlobal("main"))

@@ -19,12 +19,7 @@ golbot init
 golbot run
 ```
 
-## Scripting with Lua(IRC)
-
-golbot uses [go-ircevent](https://github.com/thoj/go-ircevent) as an IRC client, [GopherLua](https://github.com/yuin/gopher-lua) as a Lua script runtime, and [gopher-luar](https://github.com/layeh/gopher-luar) as a data converter between Go and Lua.
-
-`golbot.newbot` creates new `*irc.Connection` (in `go-ircevent`)  object wrapped by gopher-luar, so you can call same methods as `go-ircevent` .
-
+## Scripting with Lua
 
 Here is a default config script :
 
@@ -40,7 +35,6 @@ local charset = require("charset")
 function main()
   mynick = "golbot"
   myname = "golbot"
-  channels = {"#test"}
   msglog = golbot.newlogger({"seelog", type="adaptive", mininterval="200000000", maxinterval="1000000000", critmsgcount="5",
       {"formats",
         {"format", id="main", format="%Date(2006-01-02 15:04:05) %Msg"},
@@ -69,13 +63,13 @@ function main()
     }
   })
 
-  bot:connect("localhost:6667")                            -- 3
-  for i, ch in ipairs(channels) do
-    bot:join(ch)                                           -- 4
-    bot:privmsg(ch, "hello all!")                          -- 5
-  end
+  assert(bot:connect("localhost:6667,#test"))              -- 3
 
-  bot:on("PRIVMSG", function(e)                            -- 6
+  bot:respond([[\s*(\d+)\s*\+\s*(\d+)\s*]], function(m, e) -- 4
+    bot:say(e.target, tostring(tonumber(m[2]) + tonumber(m[3])))
+  end)
+
+  bot:on("PRIVMSG", function(e)                            -- 5
     local ch = e.arguments[1]
     local nick = e.nick
     local user = e.user
@@ -86,26 +80,26 @@ function main()
     end
 
     msglog:printf("%s\t%s\t%s", ch, source, msg)
-    bot:privmsg(ch, msg)                                   
+    bot.raw:privmsg(ch, msg)                               -- 6
     notifywoker({channel=ch, message=msg, nick=nick})      -- 7
   end)
 
   bot:serve(function(msg)                                  -- 8
-    if msg.type == "PRIVMSG" then
-      bot:privmsg(msg.channel, msg.message)
+    if msg.type == "say" then
+      bot:say(msg.channel, msg.message)
       respond(msg, true)                                   -- 9
     end
   end)
 end
 
-function worker(msg)                                                    -- 10
-  notifymain({type="PRIVMSG", channel=msg.channel, message="accepted"}) -- 11
+function worker(msg)                                       -- 10
+  notifymain({type="say", channel=msg.channel, message="accepted"}) -- 11
 end
 
 function http(r)                                           -- 12
-  if method == "POST" and url.path == "/privmsg" then
+  if r.method == "POST" and r.URL.path == "/say" then
     local msg = json.decode(r:readbody())
-    local ok, success = requestmain({type="PRIVMSG", channel=msg.channel, message=msg.message, result=result})   -- 13
+    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message, result=result}) -- 13
     if ok and success then
       return 200,
              {
@@ -133,13 +127,30 @@ end
     - `#1` : chat type. currently supports only `"IRC"`
     - `#2` : nick name
     - `#3` : user name
-    - `#4` : options as a table
-        - `worker` : number of worker goroutines
-        - `log` : 
-            - `function` : function to log system messages( `function(msg:string) end` )
-            - `table` : [seelog](https://github.com/cihub/seelog) XML configuration as a lua table to log system messages
-- 3-5. accesses `*irc.Connection` struct methods.
-- 6. adds callbacks for events. Almost same as `irc.Connection#AddCallback`, but guarantees Lua vm thread safety.
+    - `#4` : options(including protocol specific) as a table 
+        - Common options are:
+            - `worker` : number of worker goroutines
+            - `log` : 
+                - `function` : function to log system messages( `function(msg:string) end` )
+                - `table` : [seelog](https://github.com/cihub/seelog) XML configuration as a lua table to log system messages
+            - `http` : Address with port for binding HTTP REST API server
+        - `userTLS` and `password` are IRC specific options
+- 3. connects to the server.
+    - `#1` : procotol specific connection spec
+- 4. adds a callback that will be called when bot receives a message.
+    - `#1` : regular expression(this value will be evaluated by Go's regexp package)
+    - `#2` : callback function
+        - `m(table)` : captured groups as a list of strings.
+        - `e(object)` : message event object:
+            - `target(string)`
+            - `from(string)`
+            - `message(string)`
+            - `raw(object)`: underlying procotol specific object
+- 5. adds a callback for procotol specific events.
+    - `#1` : event name
+    - `#2` : callback function
+        - `e(object)` : procotol specific event object
+- 6. calls underlying procotol specific client methods.
 - 7. sends a message to the worker goroutines.
 - 8. starts main goroutine.
     - `#1` : callback function that will be called when messages are sent by worker goroutines.  The callback function that will be called when messages are sent by main gorougine.
@@ -148,6 +159,18 @@ end
 - 11. sends a message to the main goroutine.
 - 12. a function that will be executed when http requests are arrived.
 - 13. sends a message to the main goroutine and receives a result from the main goroutine.
+
+## IRC 
+
+golbot uses [go-ircevent](https://github.com/thoj/go-ircevent) as an IRC client, [GopherLua](https://github.com/yuin/gopher-lua) as a Lua script runtime, and [gopher-luar](https://github.com/layeh/gopher-luar) as a data converter between Go and Lua.
+
+- `golbot.newbot` creates new `*irc.Connection` (in `go-ircevent`)  object wrapped by gopher-luar, so `bot.raw` has same methods as `*irc.Connection` .
+- Protocol specific event object has same method as `*irc.Event`
+- Protocol specific event names are same as first argument of `*irc.Connection#AddCallback` .
+- Protocol specific options for `golbot.newbot` are:
+    - `useTLS(bool)`
+    - `password(string)`
+
 
 ## Logging
 
@@ -170,11 +193,10 @@ First word surrounded by `[]` is a log level in seelog. Rest are actual messages
 Examples:
 
 ```lua
-bot:privmsg("#ch", charset.encode("こんにちわ", "iso-2022-jp"))
+bot:say("#ch", charset.encode("こんにちわ", "iso-2022-jp"))
 
-bot:on("PRIVMSG", function(e)
-  local msg = e:message()
-  bot.log:printf("%s", charset.decode(msg, "iso-2022-jp"))
+bot:respond(".*", function(m, e)
+  bot.log:printf("%s", charset.decode(e.message, "iso-2022-jp"))
 end)
 ```
 
@@ -189,10 +211,8 @@ golbot consists of multiple goroutines.
 Consider, for example, the case of deploying web applications when receives a special message.
 
 ```lua
-  bot:on("PRIVMSG", function(e)
-     if is_special_message(e) then
-         do_deploy()
-     end
+  bot:respond("do_deploy", function(m, e)
+     do_deploy()
   end)
 ```
 
@@ -201,16 +221,13 @@ Consider, for example, the case of deploying web applications when receives a sp
 ```lua
 function main()
   -- blah blah
-  bot:on("PRIVMSG", function(e)
-     local ch = e.arguments[1]
-     if is_special_message(e) then
-        notifywoker({ch=ch, message="do_deploy"})
-        bot:privmsg(ch, "Your deploy request is accepted. Please wait a minute.")
-     end
+  bot:respond("do_deploy", function(m, e)
+     notifywoker({ch=e.target, message="do_deploy"})
+     bot:say(e.target, "Your deploy request is accepted. Please wait a minute.")
   end)
 
   bot:serve(function(msg)
-    bot:privmsg(msg.ch, msg.message)
+    bot:say(msg.ch, msg.message)
   end)
 end
 
@@ -236,9 +253,9 @@ If the `http` global function exists in the `golbot.lua`, REST API feature will 
 
 ```lua
 function http(r)
-  if r.method == "POST" and r.URL.path == "/privmsg" then
+  if r.method == "POST" and r.URL.path == "/say" then
     local msg = json.decode(r:readbody())
-    local ok, success = requestmain({type="PRIVMSG", channel=msg.channel, message=msg.message, result=result})
+    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message, result=result})
     if ok and success then
       return 200,
              {

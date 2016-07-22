@@ -17,7 +17,6 @@ import (
 	luajson "github.com/layeh/gopher-json"
 	"github.com/layeh/gopher-luar"
 	"github.com/otm/gluash"
-	"github.com/yuin/charsetutil"
 	"github.com/yuin/gluare"
 	"github.com/yuin/gopher-lua"
 )
@@ -33,7 +32,6 @@ local charset = require("charset")
 function main()
   mynick = "golbot"
   myname = "golbot"
-  channels = {"#test"}
   msglog = golbot.newlogger({"seelog", type="adaptive", mininterval="200000000", maxinterval="1000000000", critmsgcount="5",
       {"formats",
         {"format", id="main", format="%Date(2006-01-02 15:04:05) %Msg"},
@@ -62,11 +60,11 @@ function main()
     }
   })
 
-  bot:connect("localhost:6667")
-  for i, ch in ipairs(channels) do
-    bot:join(ch)
-    bot:privmsg(ch, "hello all!")
-  end
+  assert(bot:connect("localhost:6667,#test"))
+
+  bot:respond([[\s*(\d+)\s*\+\s*(\d+)\s*]], function(m, e)
+    bot:say(e.target, tostring(tonumber(m[2]) + tonumber(m[3])))
+  end)
 
   bot:on("PRIVMSG", function(e)
     local ch = e.arguments[1]
@@ -79,26 +77,26 @@ function main()
     end
 
     msglog:printf("%s\t%s\t%s", ch, source, msg)
-    bot:privmsg(ch, msg)
+    bot.raw:privmsg(ch, msg)
     notifywoker({channel=ch, message=msg, nick=nick})
   end)
 
   bot:serve(function(msg)
-    if msg.type == "PRIVMSG" then
-      bot:privmsg(msg.channel, msg.message)
+    if msg.type == "say" then
+      bot:say(msg.channel, msg.message)
       respond(msg, true)
     end
   end)
 end
 
 function worker(msg)
-  notifymain({type="PRIVMSG", channel=msg.channel, message="accepted"})
+  notifymain({type="say", channel=msg.channel, message="accepted"})
 end
 
 function http(r)
-  if r.method == "POST" and r.URL.path == "/privmsg" then
+  if r.method == "POST" and r.URL.path == "/say" then
     local msg = json.decode(r:readbody())
-    local ok, success = requestmain({type="PRIVMSG", channel=msg.channel, message=msg.message, result=result})
+    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message, result=result})
     if ok and success then
       return 200,
              {
@@ -127,53 +125,31 @@ var luaWorkerChan chan lua.LValue
 var mainL *lua.LState
 var mutex sync.Mutex
 
-var charsetMod map[string]lua.LGFunction = map[string]lua.LGFunction{
-	"decode": func(L *lua.LState) int {
-		bytes, err := charsetutil.DecodeString(L.CheckString(1), L.CheckString(2))
-		if err != nil {
-			L.RaiseError(err.Error())
+type CommonClientOption struct {
+	ConfFile   string
+	NumWorkers int
+	HttpAddr   string
+	Logger     *log.Logger
+}
+
+func newCommonClientOption(conf string) *CommonClientOption {
+	return &CommonClientOption{
+		ConfFile:   conf,
+		NumWorkers: 3,
+		HttpAddr:   "127.0.0.1:6669",
+		Logger:     nil,
+	}
+}
+
+func startHttpServer(co *CommonClientOption) {
+	if co.HttpAddr != "" {
+		server := &http.Server{
+			Addr:    co.HttpAddr,
+			Handler: &httpHandler{co.Logger, co.ConfFile},
 		}
-		L.Push(lua.LString(string(bytes)))
-		return 1
-	},
-	"encode": func(L *lua.LState) int {
-		s, err := charsetutil.EncodeString(L.CheckString(1), L.CheckString(2))
-		if err != nil {
-			L.RaiseError(err.Error())
-		}
-		L.Push(lua.LString(s))
-		return 1
-	},
-}
-
-func pushN(L *lua.LState, values ...lua.LValue) {
-	for _, v := range values {
-		L.Push(v)
+		co.Logger.Printf("http server started on %s", co.HttpAddr)
+		go server.ListenAndServe()
 	}
-}
-
-func getStringField(L *lua.LState, t lua.LValue, key string) (string, bool) {
-	lv := L.GetField(t, key)
-	if s, ok := lv.(lua.LString); ok {
-		return string(s), true
-	}
-	return "", false
-}
-
-func getNumberField(L *lua.LState, t lua.LValue, key string) (float64, bool) {
-	lv := L.GetField(t, key)
-	if n, ok := lv.(lua.LNumber); ok {
-		return float64(n), true
-	}
-	return 0, false
-}
-
-func toCamel(s string) string {
-	return strings.Replace(strings.Title(strings.Replace(s, "_", " ", -1)), " ", "", -1)
-}
-
-type chatClient interface {
-	Logger() *log.Logger
 }
 
 type luaLogger struct {
@@ -216,76 +192,19 @@ func (sl *seelogLogger) Write(p []byte) (int, error) {
 	return 0, nil
 }
 
-func luaToXml(lvalue lua.LValue) string {
-	buf := []string{}
-	return strings.Join(_luaToXml(lvalue, buf), " ")
-}
-
-func _luaToXml(lvalue lua.LValue, buf []string) []string {
-	switch v := lvalue.(type) {
-	case *lua.LTable:
-		tag := v.RawGetInt(1).String()
-		buf = append(buf, fmt.Sprintf("<%s", tag))
-		v.ForEach(func(key, value lua.LValue) {
-			switch kv := key.(type) {
-			case lua.LNumber:
-			default:
-				buf = append(buf, fmt.Sprintf(" %s=\"%s\"", kv.String(), value.String()))
-			}
-		})
-		buf = append(buf, ">")
-		v.ForEach(func(key, value lua.LValue) {
-			if kv, ok := key.(lua.LNumber); ok {
-				if kv == 1 {
-					return
-				}
-				if s, ok := key.(lua.LString); ok {
-					buf = append(buf, s.String())
-				} else {
-					buf = _luaToXml(value, buf)
-				}
-			}
-		})
-		buf = append(buf, fmt.Sprintf("</%s>", tag))
-	}
-	return buf
-}
-
-func proxyLuar(L *lua.LState, tp interface{}, methods func(*lua.LState, string) bool) {
-	mt := luar.MT(L, tp)
-	newIndexFn := mt.RawGetString("__index")
-	indexFn := mt.RawGetString("__index")
-	mt.RawSetString("__newindex", L.NewFunction(func(L *lua.LState) int {
-		pushN(L, newIndexFn, L.Get(1), lua.LString(toCamel(L.CheckString(2))), L.Get(3))
-		L.Call(3, 0)
-		return 0
-	}))
-
-	mt.RawSetString("__index", L.NewFunction(func(L *lua.LState) int {
-		key := L.CheckString(2)
-		if !methods(L, key) {
-			pushN(L, indexFn, L.Get(1), lua.LString(toCamel(key)))
-			L.Call(2, 1)
-		}
-		return 1
-	}))
-}
-
-func nullProxy(L *lua.LState, key string) bool { return false }
-
 type httpHandler struct {
-	client chatClient
+	logger *log.Logger
 	conf   string
 }
 
 func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.client.Logger().Printf("[INFO] HTTP %s %s %s %s ", r.RemoteAddr, r.Method, r.RequestURI, r.Proto)
+	h.logger.Printf("[INFO] HTTP %s %s %s %s ", r.RemoteAddr, r.Method, r.RequestURI, r.Proto)
 	L := newLuaState(h.conf)
 	defer L.Close()
 	pushN(L, L.GetGlobal("http"), luar.New(L, r))
 	err := L.PCall(1, 3, nil)
 	if err != nil {
-		h.client.Logger().Printf("[ERROR] %s", err.Error())
+		h.logger.Printf("[ERROR] %s", err.Error())
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	} else {
 		L.CheckTable(-2).ForEach(func(k, v lua.LValue) {
@@ -299,38 +218,36 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func newLuaState(conf string) *lua.LState {
 	L := lua.NewState()
-	var client chatClient
-	nworker := 3
-	httpaddr := ""
 
+	registerIRCChatClientType(L)
 	mod := L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
 		"newbot": func(L *lua.LState) int {
 			nick := L.CheckString(2)
 			user := L.CheckString(3)
 			opt := L.OptTable(4, L.NewTable())
-			var logger *log.Logger
+			co := newCommonClientOption(conf)
 			switch v := L.GetField(opt, "log").(type) {
 			case *lua.LFunction:
-				logger = log.New(&luaLogger{L, v}, "", log.LstdFlags)
+				co.Logger = log.New(&luaLogger{L, v}, "", log.LstdFlags)
 			case *lua.LTable:
 				l, err := seelog.LoggerFromConfigAsString(luaToXml(v))
 				if err != nil {
 					L.RaiseError(err.Error())
 				}
-				logger = log.New(&seelogLogger{l}, "", 0)
+				co.Logger = log.New(&seelogLogger{l}, "", 0)
+			}
+			if n, ok := getNumberField(L, opt, "worker"); ok {
+				co.NumWorkers = int(n)
+			}
+			if s, ok := getStringField(L, opt, "http"); ok {
+				co.HttpAddr = s
 			}
 
 			switch L.CheckString(1) {
 			case "IRC":
-				client = newIRCBot(L, nick, user, logger, opt)
+				newIRCChatClient(L, nick, user, co, opt)
 			default:
 				L.RaiseError("unknown chat type: %s", L.ToString(1))
-			}
-			if n, ok := getNumberField(L, opt, "worker"); ok {
-				nworker = int(n)
-			}
-			if s, ok := getStringField(L, opt, "http"); ok {
-				httpaddr = s
 			}
 			return 1
 		},
@@ -345,23 +262,12 @@ func newLuaState(conf string) *lua.LState {
 	})
 	L.SetField(mod, "cmain", lua.LChannel(luaMainChan))
 	L.SetField(mod, "cworker", lua.LChannel(luaWorkerChan))
-	startHttpServer := func() {
-		if httpaddr != "" {
-			server := &http.Server{
-				Addr:    httpaddr,
-				Handler: &httpHandler{client, conf},
-			}
-			client.Logger().Printf("http server started on %s", httpaddr)
-			go server.ListenAndServe()
-		}
-	}
-	newIRCLuaState(L, conf, nworker, startHttpServer)
-
-	proxyLuar(L, log.Logger{}, nullProxy)
-	proxyLuar(L, url.Values{}, nullProxy)
-	proxyLuar(L, url.Userinfo{}, nullProxy)
-	proxyLuar(L, url.URL{}, nullProxy)
-	proxyLuar(L, http.Cookie{}, nullProxy)
+	proxyLuar(L, MessageEvent{}, nil)
+	proxyLuar(L, log.Logger{}, nil)
+	proxyLuar(L, url.Values{}, nil)
+	proxyLuar(L, url.Userinfo{}, nil)
+	proxyLuar(L, url.URL{}, nil)
+	proxyLuar(L, http.Cookie{}, nil)
 	proxyLuar(L, http.Request{}, func(L *lua.LState, key string) bool {
 		if key == "readbody" || key == "ReadBody" {
 			L.Push(L.NewFunction(func(L *lua.LState) int {

@@ -43,7 +43,9 @@ function main()
       }
   })
 
-  local bot = golbot.newbot("IRC", mynick, myname, {
+  local bot = golbot.newbot("IRC", {
+    nickname = mynick,
+    username = myname,
     conn = "localhost:6667,#test",
     useTLS = false,
     password = "password",
@@ -120,6 +122,7 @@ end
 
 var luaMainChan chan lua.LValue
 var luaWorkerChan chan lua.LValue
+var luaWorkerQuitChan chan bool
 
 var mainL *lua.LState
 var mutex sync.Mutex
@@ -148,6 +151,29 @@ func startHttpServer(co *CommonClientOption) {
 		}
 		co.Logger.Printf("http server started on %s", co.HttpAddr)
 		go server.ListenAndServe()
+	}
+}
+
+func startWorkers(co *CommonClientOption) {
+	for i := 0; i < co.NumWorkers; i++ {
+		go func() {
+			L := newLuaState(co.ConfFile)
+			for {
+				select {
+				case msg := <-luaWorkerChan:
+					pushN(L, L.GetGlobal("worker"), msg)
+					L.PCall(1, 0, nil)
+				case <-luaWorkerQuitChan:
+					return
+				}
+			}
+		}()
+	}
+}
+
+func stopWorkers(co *CommonClientOption) {
+	for i := 0; i < co.NumWorkers; i++ {
+		luaWorkerQuitChan <- true
 	}
 }
 
@@ -221,9 +247,7 @@ func newLuaState(conf string) *lua.LState {
 	registerIRCChatClientType(L)
 	mod := L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
 		"newbot": func(L *lua.LState) int {
-			nick := L.CheckString(2)
-			user := L.CheckString(3)
-			opt := L.OptTable(4, L.NewTable())
+			opt := L.OptTable(2, L.NewTable())
 			co := newCommonClientOption(conf)
 			switch v := L.GetField(opt, "log").(type) {
 			case *lua.LFunction:
@@ -244,7 +268,7 @@ func newLuaState(conf string) *lua.LState {
 
 			switch L.CheckString(1) {
 			case "IRC":
-				newIRCChatClient(L, nick, user, co, opt)
+				newIRCChatClient(L, co, opt)
 			default:
 				L.RaiseError("unknown chat type: %s", L.ToString(1))
 			}
@@ -353,6 +377,7 @@ Commands:
 
 	luaMainChan = make(chan lua.LValue, 1)
 	luaWorkerChan = make(chan lua.LValue, 1)
+	luaWorkerQuitChan = make(chan bool)
 	mainL := newLuaState(optConfFile)
 	mainL.Push(mainL.GetGlobal("main"))
 	mainL.Call(0, 0)

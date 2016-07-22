@@ -54,6 +54,11 @@ func (client *ircChatClient) Respond(L *lua.LState, pattern string, fn *lua.LFun
 
 func (client *ircChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 	irc := client.ircobj
+
+	irc.Log.Printf("spawn workers\n")
+	startWorkers(client.commonOption)
+	startHttpServer(client.commonOption)
+
 	if len(irc.Server) == 0 {
 		parts := strings.Split(client.conn, ",")
 		if err := irc.Connect(parts[0]); err != nil {
@@ -65,18 +70,6 @@ func (client *ircChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 	}
 
 	v := reflect.ValueOf(*irc)
-	for i := 0; i < client.commonOption.NumWorkers; i++ {
-		irc.Log.Printf("spawn worker\n")
-		go func() {
-			L := newLuaState(client.commonOption.ConfFile)
-			for !v.FieldByName("quit").Bool() {
-				pushN(L, L.GetGlobal("worker"), <-luaWorkerChan)
-				L.PCall(1, 0, nil)
-			}
-		}()
-	}
-
-	startHttpServer(client.commonOption)
 	errChan := irc.ErrorChan()
 	for !v.FieldByName("quit").Bool() {
 		select {
@@ -108,9 +101,15 @@ func registerIRCChatClientType(L *lua.LState) {
 	proxyLuar(L, irc.Event{}, nil)
 }
 
-func newIRCChatClient(L *lua.LState, nick, user string, co *CommonClientOption, opt *lua.LTable) {
-	ircobj := irc.IRC(nick, user)
-	chatClient := &ircChatClient{ircobj, co, ""}
+func newIRCChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable) {
+	nickname, nok := getStringField(L, opt, "nickname")
+	username, uok := getStringField(L, opt, "username")
+	if !nok || !uok {
+		L.RaiseError("'nickname' and 'username' are required")
+	}
+
+	ircobj := irc.IRC(nickname, username)
+	chatClient := &ircChatClient{ircobj, co, "127.0.0.1:6667"}
 
 	if co.Logger != nil {
 		ircobj.Log = co.Logger

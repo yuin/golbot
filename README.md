@@ -46,7 +46,9 @@ function main()
       }
   })
 
-  local bot = golbot.newbot("IRC", mynick, myname, {       -- 2
+  local bot = golbot.newbot("IRC", {                       -- 2
+    nickname = mynick,
+    username = myname,
     conn = "localhost:6667,#test",
     useTLS = false,
     password = "password",
@@ -124,16 +126,14 @@ end
 - 1. requires golbot library.
 - 2. creates new bot.
     - `#1` : chat type. currently supports only `"IRC"`
-    - `#2` : nick name
-    - `#3` : user name
-    - `#4` : options(including protocol specific) as a table 
+    - `#2` : options(including protocol specific) as a table 
         - Common options are:
             - `worker` : number of worker goroutines
             - `log` : 
                 - `function` : function to log system messages( `function(msg:string) end` )
                 - `table` : [seelog](https://github.com/cihub/seelog) XML configuration as a lua table to log system messages
             - `http` : Address with port for binding HTTP REST API server
-        - `conn`, `userTLS` and `password` are IRC specific options
+        - `nickname`, `username`, `conn`, `userTLS` and `password` are IRC specific options
 - 3. adds a callback that will be called when bot receives a message.
     - `#1` : regular expression(this value will be evaluated by Go's regexp package)
     - `#2` : callback function

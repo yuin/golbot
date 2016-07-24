@@ -173,7 +173,7 @@ golbot uses [go-ircevent](https://github.com/thoj/go-ircevent) as an IRC client,
 
 golbot uses [slack](https://github.com/nlopes/slack) as a Slack client.
 
-- `golbot init slack` generates a default lua config for IRC bots.
+- `golbot init slack` generates a default lua config for Slack bots.
 - `golbot.newbot` creates new `*slack.RTM` (in `slack`)  object wrapped by gopher-luar, so `bot.raw` has same methods as `*slack.RTM` .
 - Protocol specific event object has same method as `*irc.*Event`. Events are listed near [line 349 of websocket_managed_conn.go](https://github.com/nlopes/slack/blob/master/websocket_managed_conn.go#L349) .
 - Protocol specific event names are same as [message type of Slack API](https://api.slack.com/events/message)

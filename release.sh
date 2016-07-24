@@ -99,13 +99,13 @@ done
 
 _GO_VERSION=`go version`
 [ $? -ne 0 ] && abort "'go' command not found on PATH"
-if [ ! `which gox >/dev/null 2>&1` ]; then
+if ! `which gox >/dev/null 2>&1` ; then
   print-msg I "'gox' command not found on PATH."
   print-msg I "Installing gox..."
   go get github.com/mitchellh/gox
   [ $? -ne 0 ] && abort "Failed to install gox"
 fi
-if [ ! `which ghr >/dev/null 2>&1` ]; then
+if ! `which ghr >/dev/null 2>&1` ; then
   print-msg I "'ghr' command not found on PATH."
   print-msg I "Installing ghr..."
   go get github.com/tcnksm/ghr
@@ -159,9 +159,9 @@ if [ ${UPLOAD_ONLY} -eq 0 ]; then
   fi
   
   rm -rf "${SCRIPT_DIR}/packages"
-  _GOX_OS="darwin windows linux freebsd"
-  print-msg I "gox -output=${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -os=${_GOX_OS} -ldflags="-s"
-  env CGO_ENABLED=0 gox -output="${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -os="${_GOX_OS}" -ldflags="-s"
+  _GOX_OSARCH="darwin/386 darwin/amd64 linux/386 linux/amd64 linux/arm freebsd/386 freebsd/amd64 freebsd/arm windows/386 windows/amd64"
+  print-msg I "gox -output=${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -osarch=${_GOX_OSARCH} -ldflags="-s"
+  env CGO_ENABLED=0 gox -output="${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -osarch="${_GOX_OSARCH}" -ldflags="-s"
   handle-build-result $?
 fi
 

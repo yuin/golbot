@@ -47,7 +47,7 @@ handle-build-result () {
   fi
 }
 
-[ `which greadlink` >/dev/null 2>&1 ] && _readlink=greadlink || _readlink=readlink
+`which greadlink >/dev/null 2&>1` && _readlink=greadlink || _readlink=readlink
 SCRIPT_DIR=$(dirname $(${_readlink} -f $0))
 cd "${SCRIPT_DIR}"
 
@@ -99,21 +99,29 @@ done
 
 _GO_VERSION=`go version`
 [ $? -ne 0 ] && abort "'go' command not found on PATH"
-if [ ! `which gox` >/dev/null 2>&1 ]; then
+if [ ! `which gox >/dev/null 2>&1` ]; then
   print-msg I "'gox' command not found on PATH."
   print-msg I "Installing gox..."
   go get github.com/mitchellh/gox
   [ $? -ne 0 ] && abort "Failed to install gox"
 fi
-if [ ! `which ghr` >/dev/null 2>&1 ]; then
+if [ ! `which ghr >/dev/null 2>&1` ]; then
   print-msg I "'ghr' command not found on PATH."
   print-msg I "Installing ghr..."
   go get github.com/tcnksm/ghr
   [ $? -ne 0 ] && abort "Failed to install ghr"
 fi
 
-CPU_NUM=$(python -c 'import multiprocessing; print(multiprocessing.cpu_count())')
+CPU_NUM="${NUMBER_OF_PROCESSORS}"
+if [ -z "${CPU_NUM}" ]; then
+  CPU_NUM=$(python -c 'import multiprocessing; print(multiprocessing.cpu_count())')
+fi
 print-msg I "num of cpus: ${CPU_NUM}"
+
+_SUDO=sudo
+if `echo "${OS}" | grep -q "Win"` ; then
+  _SUDO=
+fi
 
 _OLD_IFS="${IFS}"
 IFS='
@@ -129,8 +137,8 @@ if [ ${INSTALL_STD} = 1 ]; then
   for _OSARCH in "${GOX_OSARCHS[@]}" ; do
     _OS=$(echo ${_OSARCH} | sed -E 's!(.*)/(.*)!\1!g')
     _ARCH=$(echo ${_OSARCH} | sed -E 's!(.*)/(.*)!\2!g')
-    print-msg I "sudo env GOOS=${_OS} GOARCH=${_ARCH} go install std"
-    sudo env PATH="${PATH}" GOROOT="${GOROOT}" GOPATH="${GOPATH}" GOOS=${_OS} GOARCH=${_ARCH} go install std
+    print-msg I "${_SUDO} env GOOS=${_OS} GOARCH=${_ARCH} go install std"
+    ${_SUDO} env PATH="${PATH}" GOROOT="${GOROOT}" GOPATH="${GOPATH}" GOOS=${_OS} GOARCH=${_ARCH} go install std
     [ $? -ne 0 ] && print-msg W "Failed to install std"
   done
 fi
@@ -151,9 +159,9 @@ if [ ${UPLOAD_ONLY} -eq 0 ]; then
   fi
   
   rm -rf "${SCRIPT_DIR}/packages"
-  
-  print-msg I "gox -output=${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -ldflags="-s"
-  env CGO_ENABLED=0 gox -output="${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -ldflags="-s"
+  _GOX_OS="darwin windows linux freebsd"
+  print-msg I "gox -output=${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -os=${_GOX_OS} -ldflags="-s"
+  env CGO_ENABLED=0 gox -output="${SCRIPT_DIR}/packages/{{.Dir}}_${RELEASE_TAG}_{{.OS}}_{{.Arch}}" -os="${_GOX_OS}" -ldflags="-s"
   handle-build-result $?
 fi
 

@@ -125,7 +125,7 @@ end
 
 - 1. requires golbot library.
 - 2. creates new bot.
-    - `#1` : chat type. currently supports only `"IRC"`
+    - `#1` : chat type. currently supports `"IRC"` and `"Slack"`
     - `#2` : options(including protocol specific) as a table 
         - Common options are:
             - `log` : 

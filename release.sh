@@ -14,15 +14,18 @@ EOF
   exit 1
 }
 
-print-msg () { # log-msg level msg color
+print-msg () { # print-msg level msg color
   local now=`date '+%Y/%m/%d %H:%M:%S'`
   local log=`printf "%-20s %-50s\n" "${now}" "${2}"`
   if [ ! -z "${3}" ]; then
     cRED=31; cGREEN=32; cYELLOW=33; cBLUE=34; cMAGENTA=35; cCYAN=36; cWHITE=37
     echo -e "\033[1;$(eval "echo \$c${3}")m${log}\033[0m"
+  elif `echo ${1} | grep -q "W.*"` ; then
+    echo -e "\033[1;33m${log}\033[0m"
+  elif `echo ${1} | grep -q "E.*"` ; then
+    echo -e "\033[1;31m${log}\033[0m"
   else
-    echo ${1} | grep -E "[EW].*" > /dev/null 2>&1
-    [ $? -eq 0 ] && echo -e "\033[1;31m${log}\033[0m" || echo "${log}"
+    echo "${log}"
   fi
   return 0
 }
@@ -37,10 +40,10 @@ handle-build-result () {
     if [ ${IGNORE_BUILD_ERROR} = 0 ]; then
       abort "Failed to build packages"
     else
-      print-msg W "Failed to build some packages" YELLOW
+      print-msg W "Failed to build some packages"
     fi
   else
-    print-msg W "All packages have been built successfully" CYAN
+    print-msg I "All packages have been built successfully" CYAN
   fi
 }
 
@@ -162,7 +165,7 @@ fi
 print-msg I "ghr --parallel=${_NUM_THREADS} --delete --token=**** ${RELEASE_TAG} packages"
 ghr --parallel=${_NUM_THREADS} --delete --token=${GITHUB_TOKEN} ${RELEASE_TAG} packages
 [ $? -ne 0 ] && abort "Failed to upload some packages"
-print-msg W "All packages have been uploaded successfully" CYAN
+print-msg I "All packages have been uploaded successfully" CYAN
 
 if [ ${UPLOAD_ONLY} -eq 0 ]; then
   if [ "${_OLD_BRANCH}" != "${BRANCH}" ]; then

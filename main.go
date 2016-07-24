@@ -49,7 +49,6 @@ function main()
     conn = "localhost:6667,#test",
     useTLS = false,
     password = "password",
-    worker = 3,
     http = "0.0.0.0:6669",
     log = {"seelog", type="adaptive", mininterval="200000000", maxinterval="1000000000", critmsgcount="5",
       {"formats",
@@ -79,7 +78,7 @@ function main()
 
     msglog:printf("%s\t%s\t%s", ch, source, msg)
     bot.raw:privmsg(ch, msg)
-    notifywoker({channel=ch, message=msg, nick=nick})
+	goworker({channel=ch, message=msg, nick=nick})
   end)
 
   bot:serve(function(msg)
@@ -122,24 +121,21 @@ end
 
 var luaMainChan chan lua.LValue
 var luaWorkerChan chan lua.LValue
-var luaWorkerQuitChan chan bool
 
 var mainL *lua.LState
 var mutex sync.Mutex
 
 type CommonClientOption struct {
-	ConfFile   string
-	NumWorkers int
-	HttpAddr   string
-	Logger     *log.Logger
+	ConfFile string
+	HttpAddr string
+	Logger   *log.Logger
 }
 
 func newCommonClientOption(conf string) *CommonClientOption {
 	return &CommonClientOption{
-		ConfFile:   conf,
-		NumWorkers: 3,
-		HttpAddr:   "127.0.0.1:6669",
-		Logger:     nil,
+		ConfFile: conf,
+		HttpAddr: "127.0.0.1:6669",
+		Logger:   nil,
 	}
 }
 
@@ -151,29 +147,6 @@ func startHttpServer(co *CommonClientOption) {
 		}
 		co.Logger.Printf("http server started on %s", co.HttpAddr)
 		go server.ListenAndServe()
-	}
-}
-
-func startWorkers(co *CommonClientOption) {
-	for i := 0; i < co.NumWorkers; i++ {
-		go func() {
-			L := newLuaState(co.ConfFile)
-			for {
-				select {
-				case msg := <-luaWorkerChan:
-					pushN(L, L.GetGlobal("worker"), msg)
-					L.PCall(1, 0, nil)
-				case <-luaWorkerQuitChan:
-					return
-				}
-			}
-		}()
-	}
-}
-
-func stopWorkers(co *CommonClientOption) {
-	for i := 0; i < co.NumWorkers; i++ {
-		luaWorkerQuitChan <- true
 	}
 }
 
@@ -259,9 +232,6 @@ func newLuaState(conf string) *lua.LState {
 				}
 				co.Logger = log.New(&seelogLogger{l}, "", 0)
 			}
-			if n, ok := getNumberField(L, opt, "worker"); ok {
-				co.NumWorkers = int(n)
-			}
 			if s, ok := getStringField(L, opt, "http"); ok {
 				co.HttpAddr = s
 			}
@@ -321,15 +291,18 @@ func newLuaState(conf string) *lua.LState {
 	L.PreloadModule("http", gluahttp.NewHttpModule(&http.Client{}).Loader)
 	L.PreloadModule("sh", gluash.Loader)
 	L.PreloadModule("fs", gluafs.Loader)
+	L.SetGlobal("goworker", L.NewFunction(func(L *lua.LState) int {
+		go func() {
+			L := newLuaState(conf)
+			pushN(L, L.GetGlobal("worker"), <-luaWorkerChan)
+			L.PCall(1, 0, nil)
+		}()
+		luaWorkerChan <- L.CheckAny(1)
+		return 0
+	}))
 
 	if err := L.DoString(`
       local golbot = require("golbot")
-      notifywoker = function(msg) golbot.cworker:send(msg) end
-	  requestworker = function(msg)
-	    msg._result = channel.make()
-	    golbot.cworker:send(msg)
-		return msg._result:receive()
-	  end
       notifymain  = function(msg) golbot.cmain:send(msg) end
 	  requestmain = function(msg)
 	    msg._result = channel.make()
@@ -377,7 +350,6 @@ Commands:
 
 	luaMainChan = make(chan lua.LValue)
 	luaWorkerChan = make(chan lua.LValue)
-	luaWorkerQuitChan = make(chan bool)
 	mainL := newLuaState(optConfFile)
 	mainL.Push(mainL.GetGlobal("main"))
 	mainL.Call(0, 0)

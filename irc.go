@@ -24,6 +24,10 @@ func (client *ircChatClient) Logger() *log.Logger {
 	return client.ircobj.Log
 }
 
+func (client *ircChatClient) CommonOption() *CommonClientOption {
+	return client.commonOption
+}
+
 func (client *ircChatClient) Say(target, message string) {
 	client.ircobj.Privmsg(target, message)
 }
@@ -54,10 +58,6 @@ func (client *ircChatClient) Respond(L *lua.LState, pattern string, fn *lua.LFun
 
 func (client *ircChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 	irc := client.ircobj
-
-	irc.Log.Printf("spawn workers\n")
-	startWorkers(client.commonOption)
-	startHttpServer(client.commonOption)
 
 	if len(irc.Server) == 0 {
 		parts := strings.Split(client.conn, ",")

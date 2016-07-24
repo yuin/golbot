@@ -8,6 +8,7 @@ import (
 
 type ChatClient interface {
 	Logger() *log.Logger
+	CommonOption() *CommonClientOption
 	Say(target, message string)
 	On(L *lua.LState, action string, fn *lua.LFunction)
 	Respond(L *lua.LState, pattern string, fn *lua.LFunction)
@@ -91,6 +92,8 @@ func chatClientRespond(L *lua.LState) int {
 }
 
 func chatClientServe(L *lua.LState) int {
-	checkChatClientG(L).Serve(L, L.CheckFunction(2))
+	client := checkChatClientG(L)
+	startHttpServer(client.CommonOption())
+	client.Serve(L, L.CheckFunction(2))
 	return 0
 }

@@ -52,7 +52,6 @@ function main()
     conn = "localhost:6667,#test",
     useTLS = false,
     password = "password",
-    worker = 3,
     http = "0.0.0.0:6669",
     log = {"seelog", type="adaptive", mininterval="200000000", maxinterval="1000000000", critmsgcount="5",
       {"formats",
@@ -82,7 +81,7 @@ function main()
 
     msglog:printf("%s\t%s\t%s", ch, source, msg)
     bot.raw:privmsg(ch, msg)                               -- 5
-    notifywoker({channel=ch, message=msg, nick=nick})      -- 6
+    goworker({channel=ch, message=msg, nick=nick})         -- 6
   end)
 
   bot:serve(function(msg)                                  -- 7
@@ -100,7 +99,7 @@ end
 function http(r)                                           -- 11
   if r.method == "POST" and r.URL.path == "/say" then
     local msg = json.decode(r:readbody())
-    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message, result=result}) -- 12
+    local ok, success = requestmain({type="say", channel=msg.channel, message=msg.message) -- 12
     if ok and success then
       return 200,
              {
@@ -128,7 +127,6 @@ end
     - `#1` : chat type. currently supports only `"IRC"`
     - `#2` : options(including protocol specific) as a table 
         - Common options are:
-            - `worker` : number of worker goroutines
             - `log` : 
                 - `function` : function to log system messages( `function(msg:string) end` )
                 - `table` : [seelog](https://github.com/cihub/seelog) XML configuration as a lua table to log system messages
@@ -148,7 +146,7 @@ end
     - `#2` : callback function
         - `e(object)` : procotol specific event object
 - 5. calls underlying procotol specific client methods.
-- 6. sends a message to the worker goroutines.
+- 6. creates a new goroutine and sends a message to it.
 - 7. starts main goroutine.
     - `#1` : callback function that will be called when messages are sent by worker goroutines.  The callback function that will be called when messages are sent by main gorougine.
 - 8. responds to the message from other goroutines.
@@ -202,7 +200,7 @@ end)
 
 golbot consists of multiple goroutines.
 
-- main goroutine : connects and communicates with IRC servers.
+- main goroutine : connects and communicates with chat servers.
 - worker goroutines : typically execute function may takes a long time.
 - http goroutines : handle REST API requests.
 
@@ -220,7 +218,7 @@ Consider, for example, the case of deploying web applications when receives a sp
 function main()
   -- blah blah
   bot:respond("do_deploy", function(m, e)
-     notifywoker({ch=e.target, message="do_deploy"})
+     goworker({ch=e.target, message="do_deploy"})
      bot:say(e.target, "Your deploy request is accepted. Please wait a minute.")
   end)
 
@@ -239,8 +237,7 @@ end
 
 `golbot` provides functions that simplify communications between goroutines through channels.
 
-- notifywoker(msg:table) : sends the `msg` to worker goroutines.
-- requestworker(msg:table) : sends the `msg` to worker goroutines and receives a result from worker goroutines.
+- goworker(msg:table) : creates a new goroutine and sends the `msg` to it.
 - notifymain(msg:table) : sends the `msg` to the main goroutine.
 - requestmain(msg:table) : sends the `msg` to the main goroutine and receives a result from the main goroutine.
 - respond(requestmsg:table, result:any) : sends the `result` to the requestor.

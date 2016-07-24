@@ -5,6 +5,7 @@ golbot is a Lua scriptable chat bot written in Go.
 ## Supported procotols
 
 - IRC
+- Slack
 
 ## Install
 
@@ -15,13 +16,13 @@ go get github.com/yuin/golbot
 ## Getting started
 
 ```bash
-golbot init # golbot.lua will be generated
+golbot init PROTOCOL # golbot.lua will be generated
 golbot run
 ```
 
 ## Scripting with Lua
 
-Here is a default config script :
+Here is a default config script for IRC :
 
 ```lua
 local golbot = require("golbot")                           -- 1
@@ -159,6 +160,7 @@ end
 
 golbot uses [go-ircevent](https://github.com/thoj/go-ircevent) as an IRC client, [GopherLua](https://github.com/yuin/gopher-lua) as a Lua script runtime, and [gopher-luar](https://github.com/layeh/gopher-luar) as a data converter between Go and Lua.
 
+- `golbot init irc` generates a default lua config for IRC bots.
 - `golbot.newbot` creates new `*irc.Connection` (in `go-ircevent`)  object wrapped by gopher-luar, so `bot.raw` has same methods as `*irc.Connection` .
 - Protocol specific event object has same method as `*irc.Event`
 - Protocol specific event names are same as first argument of `*irc.Connection#AddCallback` .
@@ -166,6 +168,17 @@ golbot uses [go-ircevent](https://github.com/thoj/go-ircevent) as an IRC client,
     - `conn(string)` : `"host:port,#channel,#channel..."`
     - `useTLS(bool)`
     - `password(string)`
+
+## Slack
+
+golbot uses [slack](https://github.com/nlopes/slack) as a Slack client.
+
+- `golbot init slack` generates a default lua config for IRC bots.
+- `golbot.newbot` creates new `*slack.RTM` (in `slack`)  object wrapped by gopher-luar, so `bot.raw` has same methods as `*slack.RTM` .
+- Protocol specific event object has same method as `*irc.*Event`. Events are listed near [line 349 of websocket_managed_conn.go](https://github.com/nlopes/slack/blob/master/websocket_managed_conn.go#L349) .
+- Protocol specific event names are same as [message type of Slack API](https://api.slack.com/events/message)
+- Protocol specific options for `golbot.newbot` are:
+    - `token(string)` : Bot token
 
 
 ## Logging

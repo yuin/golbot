@@ -12,7 +12,45 @@ import (
 	"github.com/yuin/gopher-lua"
 )
 
-var ircChatClientTypeName = "ircChatClient"
+const ircChatClientTypeName = "ircChatClient"
+const ircDefaultConfigLua = `  mynick = "golbot"
+  myname = "golbot"
+
+  local bot = golbot.newbot("IRC", {
+    nickname = mynick,
+    username = myname,
+    conn = "localhost:6667,#test",
+    useTLS = false,
+    password = "password",
+    http = "0.0.0.0:6669",
+    log = {"seelog", type="adaptive", mininterval="200000000", maxinterval="1000000000", critmsgcount="5",
+      {"formats",
+        {"format", id="main", format="%Date(2006-01-02 15:04:05) [%Level] %Msg"},
+      },
+      {"outputs", formatid="main",
+        {"filter", levels="trace,debug,info,warn,error,critical",
+          {"console"}
+        },
+      }
+    }
+  })
+
+  bot:on("PRIVMSG", function(e)
+    local ch = e.arguments[1]
+    local nick = e.nick
+    local user = e.user
+    local source = e.source
+    local msg = e:message()
+    if nick == mynick then
+      return
+    end
+
+    msglog:printf("%s\t%s\t%s", ch, source, msg)
+    bot.raw:privmsg(ch, msg)
+	goworker({channel=ch, message=msg, nick=nick})
+  end)
+
+`
 
 type ircChatClient struct {
 	ircobj       *irc.Connection

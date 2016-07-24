@@ -30,11 +30,9 @@ local charset = require("charset")
 -- local fs = require("fs")
 
 function main()
-  mynick = "golbot"
-  myname = "golbot"
   msglog = golbot.newlogger({"seelog", type="adaptive", mininterval="200000000", maxinterval="1000000000", critmsgcount="5",
       {"formats",
-        {"format", id="main", format="%Date(2006-01-02 15:04:05) %Msg"},
+        {"format", id="main", format="%%Date(2006-01-02 15:04:05) %%Msg"},
       },
       {"outputs", formatid="main",
         {"filter", levels="trace,debug,info,warn,error,critical",
@@ -43,42 +41,10 @@ function main()
       }
   })
 
-  local bot = golbot.newbot("IRC", {
-    nickname = mynick,
-    username = myname,
-    conn = "localhost:6667,#test",
-    useTLS = false,
-    password = "password",
-    http = "0.0.0.0:6669",
-    log = {"seelog", type="adaptive", mininterval="200000000", maxinterval="1000000000", critmsgcount="5",
-      {"formats",
-        {"format", id="main", format="%Date(2006-01-02 15:04:05) [%Level] %Msg"},
-      },
-      {"outputs", formatid="main",
-        {"filter", levels="trace,debug,info,warn,error,critical",
-          {"console"}
-        },
-      }
-    }
-  })
+%s
 
   bot:respond([[\s*(\d+)\s*\+\s*(\d+)\s*]], function(m, e)
     bot:say(e.target, tostring(tonumber(m[2]) + tonumber(m[3])))
-  end)
-
-  bot:on("PRIVMSG", function(e)
-    local ch = e.arguments[1]
-    local nick = e.nick
-    local user = e.user
-    local source = e.source
-    local msg = e:message()
-    if nick == mynick then
-      return
-    end
-
-    msglog:printf("%s\t%s\t%s", ch, source, msg)
-    bot.raw:privmsg(ch, msg)
-	goworker({channel=ch, message=msg, nick=nick})
   end)
 
   bot:serve(function(msg)
@@ -218,6 +184,7 @@ func newLuaState(conf string) *lua.LState {
 	L := lua.NewState()
 
 	registerIRCChatClientType(L)
+	registerSlackChatClientType(L)
 	mod := L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
 		"newbot": func(L *lua.LState) int {
 			opt := L.OptTable(2, L.NewTable())
@@ -239,6 +206,8 @@ func newLuaState(conf string) *lua.LState {
 			switch L.CheckString(1) {
 			case "IRC":
 				newIRCChatClient(L, co, opt)
+			case "Slack":
+				newSlackChatClient(L, co, opt)
 			default:
 				L.RaiseError("unknown chat type: %s", L.ToString(1))
 			}
@@ -331,7 +300,9 @@ General options:
   -c : configuration file path (default: golbot.lua)
 Commands:
   run : runs a bot
-  init : generate default golbot.lua
+  init : generate default golbot.lua.
+      init irc : for IRC
+      init slack : for Slack
 `)
 	}
 	flag.StringVar(&optConfFile, "-c", "golbot.lua", "configuration file path(default: golbot.lua)")
@@ -343,7 +314,19 @@ Commands:
 	}
 
 	if args[0] == "init" {
-		ioutil.WriteFile("golbot.lua", ([]byte)(defaultConfigLua), 0660)
+		if len(args) < 2 {
+			flag.Usage()
+			os.Exit(1)
+		}
+		switch args[1] {
+		case "irc":
+			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, ircDefaultConfigLua)), 0660)
+		case "slack":
+			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, slackDefaultConfigLua)), 0660)
+		default:
+			flag.Usage()
+			os.Exit(1)
+		}
 		fmt.Println("./golbot.lua has been generated")
 		os.Exit(0)
 	}

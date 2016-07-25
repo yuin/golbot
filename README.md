@@ -6,6 +6,7 @@ golbot is a Lua scriptable chat bot written in Go.
 
 - IRC
 - Slack
+- Hipchat(via XMPP)
 
 ## Install
 
@@ -125,7 +126,7 @@ end
 
 - 1. requires golbot library.
 - 2. creates new bot.
-    - `#1` : chat type. currently supports `"IRC"` and `"Slack"`
+    - `#1` : chat type. currently supports `"IRC"`, `"Slack"` and `"Hipchat"`
     - `#2` : options(including protocol specific) as a table 
         - Common options are:
             - `log` : 
@@ -175,10 +176,27 @@ golbot uses [slack](https://github.com/nlopes/slack) as a Slack client.
 
 - `golbot init slack` generates a default lua config for Slack bots.
 - `golbot.newbot` creates new `*slack.RTM` (in `slack`)  object wrapped by gopher-luar, so `bot.raw` has same methods as `*slack.RTM` .
-- Protocol specific event object has same method as `*irc.*Event`. Events are listed near [line 349 of websocket_managed_conn.go](https://github.com/nlopes/slack/blob/master/websocket_managed_conn.go#L349) .
+- Protocol specific event object has same method as `*slack.*Event`. Events are listed near [line 349 of websocket_managed_conn.go](https://github.com/nlopes/slack/blob/master/websocket_managed_conn.go#L349) .
 - Protocol specific event names are same as [message type of Slack API](https://api.slack.com/events/message)
 - Protocol specific options for `golbot.newbot` are:
     - `token(string)` : Bot token
+
+## Hipchat
+
+golbot uses [hipchat](https://github.com/daneharrigan/hipchat) as a Slack XMPP client.
+
+- `golbot init hipchat` generates a default lua config for Hipchat bots.
+- `golbot.newbot` creates new `*hipchat.Client` (in `hipchat`)  object wrapped by gopher-luar, so `bot.raw` has same methods as `*hipchat.Client` .
+- Protocol specific event object has same method as `*hipchat.Message`.
+- Protocol specific event names are
+    - `"message"`
+- Protocol specific options for `golbot.newbot` are:
+    - `user(string)` : Hipchat XMPP user name. You can find it on the Hipchat account page(https://yourdomain.hipchat.com/account/xmpp)
+    - `password(string)` : password
+    - `host(string)` : hostname like `"chat.hipchat.com"`.
+    - `conf(string)` : conf hostname like `"conf.hipchat.com"`.
+    - `room_jids(list of string): XMPP JIDs like `{"111111_xxxxx@conf.hipchat.com", "111111_yyyy@conf.hipchat.com"}`
+
 
 
 ## Logging

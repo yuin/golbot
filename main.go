@@ -185,6 +185,7 @@ func newLuaState(conf string) *lua.LState {
 
 	registerIRCChatClientType(L)
 	registerSlackChatClientType(L)
+	registerHipchatChatClientType(L)
 	mod := L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
 		"newbot": func(L *lua.LState) int {
 			opt := L.OptTable(2, L.NewTable())
@@ -208,6 +209,8 @@ func newLuaState(conf string) *lua.LState {
 				newIRCChatClient(L, co, opt)
 			case "Slack":
 				newSlackChatClient(L, co, opt)
+			case "Hipchat":
+				newHipchatChatClient(L, co, opt)
 			default:
 				L.RaiseError("unknown chat type: %s", L.ToString(1))
 			}
@@ -303,6 +306,7 @@ Commands:
   init : generate default golbot.lua.
       init irc : for IRC
       init slack : for Slack
+      init hipchat : for Hipchat
 `)
 	}
 	flag.StringVar(&optConfFile, "-c", "golbot.lua", "configuration file path(default: golbot.lua)")
@@ -323,6 +327,8 @@ Commands:
 			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, ircDefaultConfigLua)), 0660)
 		case "slack":
 			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, slackDefaultConfigLua)), 0660)
+		case "hipchat":
+			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, hipchatDefaultConfigLua)), 0660)
 		default:
 			flag.Usage()
 			os.Exit(1)

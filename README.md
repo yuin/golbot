@@ -195,7 +195,7 @@ golbot uses [hipchat](https://github.com/daneharrigan/hipchat) as a Slack XMPP c
     - `password(string)` : password
     - `host(string)` : hostname like `"chat.hipchat.com"`.
     - `conf(string)` : conf hostname like `"conf.hipchat.com"`.
-    - `room_jids(list of string): XMPP JIDs like `{"111111_xxxxx@conf.hipchat.com", "111111_yyyy@conf.hipchat.com"}`
+    - `room_jids(list of string)`: XMPP JIDs like `{"111111_xxxxx@conf.hipchat.com", "111111_yyyy@conf.hipchat.com"}`
 
 
 

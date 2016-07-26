@@ -30,7 +30,7 @@ local golbot = require("golbot")                           -- 1
 local json = require("json")
 local charset = require("charset")
 -- local re = require("re")
--- local httpclient = require("http")
+-- local requests = require("requests")
 -- local sh = require("sh")
 -- local fs = require("fs")
 

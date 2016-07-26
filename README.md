@@ -318,7 +318,6 @@ end
 ## Bundled Lua libraries
 
 - [gluare](https://github.com/yuin/gluare>)
-- [gluahttp](https://github.com/cjoudrey/gluahttp)
 - [gopher-json](https://github.com/layeh/gopher-json)
 - [glusfs](https://github.com/kohkimakimoto/gluafs>)
 - [gluash](https://github.com/otm/gluash)

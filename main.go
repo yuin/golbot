@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/cihub/seelog"
-	"github.com/cjoudrey/gluahttp"
 	"github.com/kohkimakimoto/gluafs"
 	luajson "github.com/layeh/gopher-json"
 	"github.com/layeh/gopher-luar"
@@ -25,7 +24,7 @@ const defaultConfigLua string = `local golbot = require("golbot")
 local json = require("json")
 local charset = require("charset")
 -- local re = require("re")
--- local httpclient = require("http")
+-- local requests = require("requests")
 -- local sh = require("sh")
 -- local fs = require("fs")
 
@@ -186,6 +185,7 @@ func newLuaState(conf string) *lua.LState {
 	registerIRCChatClientType(L)
 	registerSlackChatClientType(L)
 	registerHipchatChatClientType(L)
+	registerNullChatClientType(L)
 	mod := L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
 		"newbot": func(L *lua.LState) int {
 			opt := L.OptTable(2, L.NewTable())
@@ -211,6 +211,8 @@ func newLuaState(conf string) *lua.LState {
 				newSlackChatClient(L, co, opt)
 			case "Hipchat":
 				newHipchatChatClient(L, co, opt)
+			case "Null":
+				newNullChatClient(L, co, opt)
 			default:
 				L.RaiseError("unknown chat type: %s", L.ToString(1))
 			}
@@ -233,11 +235,13 @@ func newLuaState(conf string) *lua.LState {
 	proxyLuar(L, url.Userinfo{}, nil)
 	proxyLuar(L, url.URL{}, nil)
 	proxyLuar(L, http.Cookie{}, nil)
+	proxyLuar(L, http.Header{}, nil)
 	proxyLuar(L, http.Request{}, func(L *lua.LState, key string) bool {
 		if key == "readbody" || key == "ReadBody" {
 			L.Push(L.NewFunction(func(L *lua.LState) int {
 				r := L.CheckUserData(1).Value.(*http.Request)
 				b, err := ioutil.ReadAll(r.Body)
+				defer r.Body.Close()
 				if err != nil {
 					pushN(L, lua.LNil, lua.LString(err.Error()))
 					return 2
@@ -258,9 +262,12 @@ func newLuaState(conf string) *lua.LState {
 		L.Push(L.SetFuncs(L.NewTable(), charsetMod))
 		return 1
 	})
+	L.PreloadModule("requests", func(L *lua.LState) int {
+		L.Push(L.SetFuncs(L.NewTable(), requestsMod))
+		return 1
+	})
 	luajson.Preload(L)
 	L.PreloadModule("re", gluare.Loader)
-	L.PreloadModule("http", gluahttp.NewHttpModule(&http.Client{}).Loader)
 	L.PreloadModule("sh", gluash.Loader)
 	L.PreloadModule("fs", gluafs.Loader)
 	L.SetGlobal("goworker", L.NewFunction(func(L *lua.LState) int {
@@ -275,17 +282,44 @@ func newLuaState(conf string) *lua.LState {
 
 	if err := L.DoString(`
       local golbot = require("golbot")
+      local requests = require("requests")
+      local json = require("json")
       notifymain  = function(msg) golbot.cmain:send(msg) end
-	  requestmain = function(msg)
-	    msg._result = channel.make()
-	    golbot.cmain:send(msg)
-		return msg._result:receive()
-	  end
-	  respond = function(msg, value)
-	    if msg and msg._result then
-		  msg._result:send(value)
+      requestmain = function(msg)
+        msg._result = channel.make()
+        golbot.cmain:send(msg)
+        return msg._result:receive()
+      end
+      respond = function(msg, value)
+        if msg and msg._result then
+          msg._result:send(value)
+        end
+      end
+      requests.json = function(opt)
+	    local headers = opt.headers or {}
+		opt.headers = headers
+		local found = false
+		for i, v in ipairs(headers) do
+		    if i%2 == 0 and string.lower(v) == "content-type" then
+			  found = true
+			  break
+			end
 		end
-	  end
+		if not found then
+		  table.insert(headers, "Content-Type")
+		  table.insert(headers, "application/json")
+		end
+        jdata, e = json.encode(opt.json)
+		if jdata == nil then
+		  return jdata, e
+		end
+		opt.data = jdata
+		body, resp = requests.request(opt)
+		if body == nil then
+		  return body, resp
+		end
+		return json.decode(body), resp
+      end
 	`); err != nil {
 		panic(err)
 	}
@@ -307,6 +341,7 @@ Commands:
       init irc : for IRC
       init slack : for Slack
       init hipchat : for Hipchat
+      init null : empty bot
 `)
 	}
 	flag.StringVar(&optConfFile, "-c", "golbot.lua", "configuration file path(default: golbot.lua)")
@@ -329,6 +364,8 @@ Commands:
 			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, slackDefaultConfigLua)), 0660)
 		case "hipchat":
 			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, hipchatDefaultConfigLua)), 0660)
+		case "null":
+			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, nullDefaultConfigLua)), 0660)
 		default:
 			flag.Usage()
 			os.Exit(1)

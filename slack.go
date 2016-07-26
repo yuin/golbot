@@ -15,6 +15,7 @@ import (
 
 const slackChatClientTypeName = "slackChatClient"
 const slackDefaultConfigLua = `  myname = "golbot"
+  myid   = "U1XXXXXX"
   local bot = golbot.newbot("Slack", {
     token = "",
     log = {"seelog", type="adaptive", mininterval="200000000", maxinterval="1000000000", critmsgcount="5",
@@ -34,16 +35,11 @@ const slackDefaultConfigLua = `  myname = "golbot"
     local user = e.user
     local msg = e.text
 
-    if e.sub_type == "" then
+    if e.sub_type == "" and user ~= myid then
       msglog:printf("%s\t%s\t%s", ch, user, msg)
       bot:say(ch, msg)
       goworker({channel=ch, message=msg, nick=nick})
 	end
-  end)
-
-
-  bot:respond([[\s*(\d+)\s*\+\s*(\d+)\s*]], function(m, e)
-    bot:say(e.target, tostring(tonumber(m[2]) + tonumber(m[3])))
   end)
 `
 
@@ -52,6 +48,7 @@ type slackChatClient struct {
 	rtm            *slack.RTM
 	commonOption   *CommonClientOption
 	logger         *log.Logger
+	userId         string
 	startedAt      float64
 	callbacks      map[string][]*lua.LFunction
 	userId2Name    map[string]string
@@ -119,12 +116,12 @@ func (client *slackChatClient) On(L *lua.LState, typ string, callback *lua.LFunc
 	client.callbacks[typ] = append(v, callback)
 }
 
-func (client *slackChatClient) Respond(L *lua.LState, pattern string, fn *lua.LFunction) {
-	re := regexp.MustCompile(pattern)
+func (client *slackChatClient) Respond(L *lua.LState, pattern *regexp.Regexp, fn *lua.LFunction) {
 	client.On(L, "message", L.NewFunction(func(L *lua.LState) int {
 		e := L.CheckUserData(1).Value.(*slack.MessageEvent)
-		matches := re.FindAllStringSubmatch(e.Text, -1)
-		if (e.SubType == "me_message" || len(e.SubType) == 0) && len(matches) != 0 {
+		matches := pattern.FindAllStringSubmatch(e.Text, -1)
+		mentionMe, _ := regexp.MatchString("<@"+client.userId+"[^>]*>", e.Text)
+		if (e.SubType == "me_message" || len(e.SubType) == 0) && len(matches) != 0 && mentionMe {
 			user := client.userId2Name[e.User]
 			channel := "#" + client.channelId2Name[e.Channel]
 			pushN(L, fn, luar.New(L, matches[0]), luar.New(L, NewMessageEvent(user, channel, e.Text, e)))
@@ -161,6 +158,7 @@ func (client *slackChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 
 			case *slack.ConnectedEvent:
 				channels := []string{}
+				client.userId = ev.Info.User.ID
 				for _, c := range ev.Info.Channels {
 					client.channelName2Id[c.Name] = c.ID
 					client.channelId2Name[c.ID] = c.Name
@@ -171,6 +169,7 @@ func (client *slackChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 					client.userId2Name[u.ID] = u.Name
 				}
 				client.logger.Printf("[Info] Connected to %s(channels:%s)", ev.Info.Team.Domain, strings.Join(channels, ","))
+				client.logger.Printf("[Info] My name is %s(ID:%s)", ev.Info.User.Name, client.userId)
 			default:
 				// Ignore other events..
 			}
@@ -201,7 +200,7 @@ func newSlackChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable) 
 	}
 
 	slackobj := slack.New(token)
-	chatClient := &slackChatClient{slackobj, nil, co, co.Logger, 0, make(map[string][]*lua.LFunction), make(map[string]string), make(map[string]string), make(map[string]string), make(map[string]string)}
+	chatClient := &slackChatClient{slackobj, nil, co, co.Logger, "", 0, make(map[string][]*lua.LFunction), make(map[string]string), make(map[string]string), make(map[string]string), make(map[string]string)}
 
 	if co.Logger == nil {
 		slack.SetLogger(log.New(os.Stdout, "", log.Lshortfile|log.LstdFlags))

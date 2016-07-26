@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"regexp"
 
 	"github.com/yuin/gopher-lua"
 )
@@ -11,7 +12,7 @@ type ChatClient interface {
 	CommonOption() *CommonClientOption
 	Say(target, message string)
 	On(L *lua.LState, action string, fn *lua.LFunction)
-	Respond(L *lua.LState, pattern string, fn *lua.LFunction)
+	Respond(L *lua.LState, pattern *regexp.Regexp, fn *lua.LFunction)
 	Serve(L *lua.LState, fn *lua.LFunction)
 }
 
@@ -87,7 +88,8 @@ func chatClientOn(L *lua.LState) int {
 }
 
 func chatClientRespond(L *lua.LState) int {
-	checkChatClientG(L).Respond(L, L.CheckString(2), L.CheckFunction(3))
+	re := regexp.MustCompile(L.CheckString(2))
+	checkChatClientG(L).Respond(L, re, L.CheckFunction(3))
 	return 0
 }
 

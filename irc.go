@@ -56,6 +56,7 @@ type ircChatClient struct {
 	ircobj       *irc.Connection
 	commonOption *CommonClientOption
 	conn         string
+	nick         string
 }
 
 func (client *ircChatClient) Logger() *log.Logger {
@@ -79,13 +80,13 @@ func (client *ircChatClient) On(L *lua.LState, action string, fn *lua.LFunction)
 	})
 }
 
-func (client *ircChatClient) Respond(L *lua.LState, pattern string, fn *lua.LFunction) {
-	re := regexp.MustCompile(pattern)
+func (client *ircChatClient) Respond(L *lua.LState, pattern *regexp.Regexp, fn *lua.LFunction) {
 	client.ircobj.AddCallback("PRIVMSG", func(e *irc.Event) {
 		mutex.Lock()
 		defer mutex.Unlock()
-		matches := re.FindAllStringSubmatch(e.Message(), -1)
-		if len(matches) != 0 {
+		matches := pattern.FindAllStringSubmatch(e.Message(), -1)
+		mentionMe, _ := regexp.MatchString("[@:\\\\]"+client.nick+"\\s+", e.Message())
+		if len(matches) != 0 && mentionMe {
 			pushN(L, fn, luar.New(L, matches[0]), luar.New(L, NewMessageEvent(e.Nick, e.Arguments[0], e.Message(), e)))
 			if err := L.PCall(2, 0, nil); err != nil {
 				client.ircobj.Log.Printf("[ERROR] %s", err.Error())
@@ -147,7 +148,7 @@ func newIRCChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable) {
 	}
 
 	ircobj := irc.IRC(nickname, username)
-	chatClient := &ircChatClient{ircobj, co, "127.0.0.1:6667"}
+	chatClient := &ircChatClient{ircobj, co, "127.0.0.1:6667", nickname}
 
 	if co.Logger != nil {
 		ircobj.Log = co.Logger

@@ -134,7 +134,7 @@ end
                 - `table` : [seelog](https://github.com/cihub/seelog) XML configuration as a lua table to log system messages
             - `http` : Address with port for binding HTTP REST API server
         - `nickname`, `username`, `conn`, `userTLS` and `password` are IRC specific options
-- 3. adds a callback that will be called when bot receives a message.
+- 3. adds a callback that will be called when bot receives a message. `respond` will be called only when the message contains a mention to the bot.
     - `#1` : regular expression(this value will be evaluated by Go's regexp package)
     - `#2` : callback function
         - `m(table)` : captured groups as a list of strings.
@@ -169,6 +169,7 @@ golbot uses [go-ircevent](https://github.com/thoj/go-ircevent) as an IRC client,
     - `conn(string)` : `"host:port,#channel,#channel..."`
     - `useTLS(bool)`
     - `password(string)`
+- There is no official "mention" functionallity in IRC. `@nick`, `:nick` and `\nick` are treated as a mention in `respond`.
 
 ## Slack
 

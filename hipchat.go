@@ -103,12 +103,12 @@ func (client *hipchatChatClient) On(L *lua.LState, typ string, callback *lua.LFu
 	client.callbacks[typ] = append(v, callback)
 }
 
-func (client *hipchatChatClient) Respond(L *lua.LState, pattern string, fn *lua.LFunction) {
-	re := regexp.MustCompile(pattern)
+func (client *hipchatChatClient) Respond(L *lua.LState, pattern *regexp.Regexp, fn *lua.LFunction) {
 	client.On(L, "message", L.NewFunction(func(L *lua.LState) int {
 		e := L.CheckUserData(1).Value.(*hipchat.Message)
-		matches := re.FindAllStringSubmatch(e.Body, -1)
-		if len(matches) > 0 {
+		matches := pattern.FindAllStringSubmatch(e.Body, -1)
+		mentionMe, _ := regexp.MatchString("@"+client.mentionName+"\\s+", e.Body)
+		if len(matches) > 0 && mentionMe {
 			to := strings.Split(e.From, "/")[0]
 			user := strings.Split(e.From, "/")[1]
 			if user == client.name {

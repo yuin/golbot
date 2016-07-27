@@ -82,6 +82,7 @@ var requestsMod map[string]lua.LGFunction = map[string]lua.LGFunction{
 	"request": func(L *lua.LState) int {
 		opt := L.CheckTable(1)
 		param := httpRequestParam{}
+		param.Method = "GET"
 		if method, ok := getStringField(L, opt, "method"); ok {
 			param.Method = method
 		}

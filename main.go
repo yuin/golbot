@@ -93,7 +93,12 @@ var mutex sync.Mutex
 type CommonClientOption struct {
 	ConfFile string
 	HttpAddr string
-	Logger   *log.Logger
+	Https    struct {
+		Addr     string
+		CertFile string
+		KeyFile  string
+	}
+	Logger *log.Logger
 }
 
 func newCommonClientOption(conf string) *CommonClientOption {
@@ -108,10 +113,27 @@ func startHttpServer(co *CommonClientOption) {
 	if co.HttpAddr != "" {
 		server := &http.Server{
 			Addr:    co.HttpAddr,
-			Handler: &httpHandler{co.Logger, co.ConfFile},
+			Handler: &httpHandler{co.Logger, co.ConfFile, false},
 		}
 		co.Logger.Printf("http server started on %s", co.HttpAddr)
-		go server.ListenAndServe()
+		go func() {
+			if err := server.ListenAndServe(); err != nil {
+				co.Logger.Printf("[ERROR] http server:%s", err.Error())
+			}
+		}()
+	}
+
+	if co.Https.Addr != "" {
+		server := &http.Server{
+			Addr:    co.Https.Addr,
+			Handler: &httpHandler{co.Logger, co.ConfFile, true},
+		}
+		co.Logger.Printf("https server started on %s(cert:%s, key:%s)", co.Https.Addr, co.Https.CertFile, co.Https.KeyFile)
+		go func() {
+			if err := server.ListenAndServeTLS(co.Https.CertFile, co.Https.KeyFile); err != nil {
+				co.Logger.Printf("[ERROR] https server: %s", err.Error())
+			}
+		}()
 	}
 }
 
@@ -158,13 +180,18 @@ func (sl *seelogLogger) Write(p []byte) (int, error) {
 type httpHandler struct {
 	logger *log.Logger
 	conf   string
+	isTLS  bool
 }
 
 func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.logger.Printf("[INFO] HTTP %s %s %s %s ", r.RemoteAddr, r.Method, r.RequestURI, r.Proto)
+	protocol := "http"
+	if h.isTLS {
+		protocol = "https"
+	}
+	h.logger.Printf("[INFO] %s %s %s %s %s ", protocol, r.RemoteAddr, r.Method, r.RequestURI, r.Proto)
 	L := newLuaState(h.conf)
 	defer L.Close()
-	pushN(L, L.GetGlobal("http"), luar.New(L, r))
+	pushN(L, L.GetGlobal(protocol), luar.New(L, r))
 	err := L.PCall(1, 3, nil)
 	if err != nil {
 		h.logger.Printf("[ERROR] %s", err.Error())
@@ -202,6 +229,17 @@ func newLuaState(conf string) *lua.LState {
 			}
 			if s, ok := getStringField(L, opt, "http"); ok {
 				co.HttpAddr = s
+			}
+			if tbl, ok := L.GetField(opt, "https").(*lua.LTable); ok {
+				if s, ok := getStringField(L, tbl, "addr"); ok {
+					co.Https.Addr = s
+				}
+				if s, ok := getStringField(L, tbl, "cert"); ok {
+					co.Https.CertFile = s
+				}
+				if s, ok := getStringField(L, tbl, "key"); ok {
+					co.Https.KeyFile = s
+				}
 			}
 
 			switch L.CheckString(1) {

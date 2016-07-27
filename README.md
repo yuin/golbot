@@ -315,6 +315,60 @@ end
 
 `http` function will be executed in its own thread. You can use `notify*` and `request*` functions for communicating with other goroutines.
 
+### TLS support
+
+An `https` global function and an `https` option for `golbot.newbot` enable TLS support.
+
+```lua
+
+  local bot = golbot.newbot("IRC", {                       -- 2
+      -- blah blah...
+    https = {
+      addr = "0.0.0.0:7000",
+      cert = "server.crt",
+      key  = "server.key"
+    },
+  })
+
+  function https(r)
+    -- same as `http`
+  end
+```
+
+## Make HTTP requests
+
+`requests` module provides some utilities for making HTTP requests.
+
+- `requests.request(opt:table)`
+    - `#1` : options
+        - `method(string)` : HTTP method, such as `"GET"`. This defaults to `"GET"` .
+        - `url(string)` : URL
+        - `data(string)` : Request body
+        - `param` : List of parameters such as `{name1, value1, name2, value2}`
+            - If `method` is `GET`, this value will be sent as query strings.
+            - Otherwise, this value will be sent as a form-urlencoded value and `Content-Type: application/x-www-form-urlencoded` header will also be sent.
+        - `headers` : List of headers such as `{name1, value1, name2, value2}`
+    - Retuens `body(string)` and `response(net/http#Response wrapped by gopher-luar)` if succeeded or `nil` and `error(string)` .
+- `requests.json(opt:table)`
+    - `#1` : options. Almost same as `requests.request`. The following additional options are available.
+        - `json(table)` : This value will be encoded into a json string and sent as a request body.
+    - Retuens `obj(table)` and `response(net/http#Response wrapped by gopher-luar)` if succeeded or `nil` and `error(string)` .
+    - `Content-type: application/json` header will automatically be added to the request headers.
+
+```lua
+body, response = requests.request({
+                   method="POST", 
+                   url="http://example.com/",
+                   headers={"Content-Type", "application/json"},
+                   data=json.encode(data) })
+-- same as above
+obj, response =  requests.json({
+                   method="POST", 
+                   url="http://example.com/",
+                   json=data })
+```
+
+
 ## Bundled Lua libraries
 
 - [gluare](https://github.com/yuin/gluare>)

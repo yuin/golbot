@@ -184,7 +184,7 @@ golbot uses [slack](https://github.com/nlopes/slack) as a Slack client.
 
 ## Hipchat
 
-golbot uses [hipchat](https://github.com/daneharrigan/hipchat) as a Slack XMPP client.
+golbot uses [hipchat](https://github.com/daneharrigan/hipchat) as a Hipchat XMPP client.
 
 - `golbot init hipchat` generates a default lua config for Hipchat bots.
 - `golbot.newbot` creates new `*hipchat.Client` (in `hipchat`)  object wrapped by gopher-luar, so `bot.raw` has same methods as `*hipchat.Client` .

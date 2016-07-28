@@ -96,6 +96,7 @@ func chatClientRespond(L *lua.LState) int {
 func chatClientServe(L *lua.LState) int {
 	client := checkChatClientG(L)
 	startHttpServer(client.CommonOption())
+	startCrons(client.CommonOption())
 	client.Serve(L, L.CheckFunction(2))
 	return 0
 }

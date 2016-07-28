@@ -402,6 +402,27 @@ obj, response =  requests.json({
                    json=data })
 ```
 
+## Execute scheduled jobs
+
+A `crons` option for `golbot.newbot` enables cron like scheduled jobs.
+
+```lua
+function main()
+  golbot.newbot("Null", { 
+    http = "0.0.0.0:6669" ,
+    crons = {
+      { "0 * * * * * ", "job1"}
+    }
+  }):serve(function() end)
+end
+
+function job1()
+  print "hello!"
+end
+```
+
+`golbot` uses [cron](https://godoc.org/github.com/robfig/cron) to implement this functionality, first element of a job can be 'CRON Expression Format' in `cron` .
+
 
 ## Bundled Lua libraries
 

@@ -16,6 +16,7 @@ import (
 	luajson "github.com/layeh/gopher-json"
 	"github.com/layeh/gopher-luar"
 	"github.com/otm/gluash"
+	"github.com/robfig/cron"
 	"github.com/yuin/gluare"
 	"github.com/yuin/gopher-lua"
 )
@@ -90,6 +91,11 @@ var luaWorkerChan chan lua.LValue
 var mainL *lua.LState
 var mutex sync.Mutex
 
+type CronEntry struct {
+	Spec     string
+	FuncName string
+}
+
 type CommonClientOption struct {
 	ConfFile string
 	HttpAddr string
@@ -99,6 +105,7 @@ type CommonClientOption struct {
 		KeyFile  string
 	}
 	Logger *log.Logger
+	Crons  []CronEntry
 }
 
 func newCommonClientOption(conf string) *CommonClientOption {
@@ -107,6 +114,36 @@ func newCommonClientOption(conf string) *CommonClientOption {
 		HttpAddr: "127.0.0.1:6669",
 		Logger:   nil,
 	}
+}
+
+type cronJob struct {
+	jobName string
+	logger  *log.Logger
+	conf    string
+}
+
+func (cj *cronJob) Run() {
+	cj.logger.Printf("[INFO] cron '%s' started", cj.jobName)
+	L := newLuaState(cj.conf)
+	defer L.Close()
+	L.Push(L.GetGlobal(cj.jobName))
+	if err := L.PCall(0, 0, nil); err != nil {
+		cj.logger.Printf("[ERROR] cron '%s' : %s", cj.jobName, err.Error())
+	} else {
+		cj.logger.Printf("[INFO] cron '%s' successfully completed", cj.jobName)
+	}
+}
+
+func startCrons(co *CommonClientOption) {
+	if co.Crons == nil {
+		return
+	}
+	c := cron.New()
+	c.ErrorLog = co.Logger
+	for _, entry := range co.Crons {
+		c.AddJob(entry.Spec, &cronJob{entry.FuncName, co.Logger, co.ConfFile})
+	}
+	c.Start()
 }
 
 func startHttpServer(co *CommonClientOption) {
@@ -240,6 +277,13 @@ func newLuaState(conf string) *lua.LState {
 				if s, ok := getStringField(L, tbl, "key"); ok {
 					co.Https.KeyFile = s
 				}
+			}
+			if tbl, ok := L.GetField(opt, "crons").(*lua.LTable); ok {
+				co.Crons = []CronEntry{}
+				tbl.ForEach(func(key, value lua.LValue) {
+					entry := value.(*lua.LTable)
+					co.Crons = append(co.Crons, CronEntry{entry.RawGetInt(1).String(), entry.RawGetInt(2).String()})
+				})
 			}
 
 			switch L.CheckString(1) {

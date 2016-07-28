@@ -6,7 +6,7 @@ golbot is a Lua scriptable chat bot written in Go.
 
 - IRC
 - Slack
-- Hipchat(via XMPP)
+- Hipchat
 
 ## Install
 
@@ -198,6 +198,40 @@ golbot uses [hipchat](https://github.com/daneharrigan/hipchat) as a Slack XMPP c
     - `conf(string)` : conf hostname like `"conf.hipchat.com"`.
     - `room_jids(list of string)`: XMPP JIDs like `{"111111_xxxxx@conf.hipchat.com", "111111_yyyy@conf.hipchat.com"}`
 
+As described above golbot can also act as an HTTP(S) server, so you can use golbot as [your own integration](https://blog.hipchat.com/2015/02/11/build-your-own-integration-with-hipchat/) for Hipchat.
+
+
+```lua
+local golbot = require("golbot")
+local json = require("json")
+local requests = require("requests")
+
+function main()
+  golbot.newbot("Null", { http = "0.0.0.0:6669" }):serve(function() end)
+end
+
+local headers = {
+  {"Content-Type", "application/json; charset=utf-8"}
+}
+
+function http(r)
+  if r.method == "POST" and r.URL.path == "/webhook" then
+    local data = assert(json.decode(r:readbody()))
+    local message = data.item.message.message
+    local user = data.item.message.from.name
+    local room = data.item.room.name
+
+    local ret = {
+      message = "hello! from webhook",
+      message_format = "html"
+    }
+
+    return 200, headers, json.encode(ret)
+  end
+  return 400, headers, json.encode({result="not found"})
+end
+```
+
 
 
 ## Logging
@@ -373,7 +407,7 @@ obj, response =  requests.json({
 
 - [gluare](https://github.com/yuin/gluare>)
 - [gopher-json](https://github.com/layeh/gopher-json)
-- [glusfs](https://github.com/kohkimakimoto/gluafs>)
+- [gluafs](https://github.com/kohkimakimoto/gluafs)
 - [gluash](https://github.com/otm/gluash)
 
 ## Author

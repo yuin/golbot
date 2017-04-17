@@ -13,12 +13,12 @@ import (
 
 	"github.com/cihub/seelog"
 	"github.com/kohkimakimoto/gluafs"
-	luajson "github.com/layeh/gopher-json"
-	"github.com/layeh/gopher-luar"
 	"github.com/otm/gluash"
 	"github.com/robfig/cron"
 	"github.com/yuin/gluare"
 	"github.com/yuin/gopher-lua"
+	luajson "layeh.com/gopher-json"
+	"layeh.com/gopher-luar"
 )
 
 const defaultConfigLua string = `local golbot = require("golbot")
@@ -111,7 +111,7 @@ type CommonClientOption struct {
 func newCommonClientOption(conf string) *CommonClientOption {
 	return &CommonClientOption{
 		ConfFile: conf,
-		HttpAddr: "127.0.0.1:6669",
+		HttpAddr: "",
 		Logger:   nil,
 	}
 }
@@ -250,6 +250,7 @@ func newLuaState(conf string) *lua.LState {
 	registerSlackChatClientType(L)
 	registerHipchatChatClientType(L)
 	registerNullChatClientType(L)
+	registerRocketChatClientType(L)
 	mod := L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
 		"newbot": func(L *lua.LState) int {
 			opt := L.OptTable(2, L.NewTable())
@@ -295,6 +296,8 @@ func newLuaState(conf string) *lua.LState {
 				newHipchatChatClient(L, co, opt)
 			case "Null":
 				newNullChatClient(L, co, opt)
+			case "Rocket":
+				newRocketChatClient(L, co, opt)
 			default:
 				L.RaiseError("unknown chat type: %s", L.ToString(1))
 			}
@@ -423,6 +426,7 @@ Commands:
       init irc : for IRC
       init slack : for Slack
       init hipchat : for Hipchat
+      init rocket : for RocketChat
       init null : empty bot
 `)
 	}
@@ -446,6 +450,8 @@ Commands:
 			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, slackDefaultConfigLua)), 0660)
 		case "hipchat":
 			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, hipchatDefaultConfigLua)), 0660)
+		case "rocket":
+			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, rocketDefaultConfigLua)), 0660)
 		case "null":
 			ioutil.WriteFile("golbot.lua", ([]byte)(fmt.Sprintf(defaultConfigLua, nullDefaultConfigLua)), 0660)
 		default:

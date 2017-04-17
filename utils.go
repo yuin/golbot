@@ -1,11 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/layeh/gopher-luar"
 	"github.com/yuin/gopher-lua"
+	"layeh.com/gopher-luar"
 )
 
 func pushN(L *lua.LState, values ...lua.LValue) {
@@ -87,4 +88,20 @@ func proxyLuar(L *lua.LState, tp interface{}, methods func(*lua.LState, string) 
 		}
 		return 1
 	}))
+}
+
+func mustDecodeJson(data []byte) map[string]interface{} {
+	var result interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		panic(err)
+	}
+	return asObject(result)
+}
+
+func asObject(v interface{}) map[string]interface{} {
+	return v.(map[string]interface{})
+}
+
+func asArray(v interface{}) []interface{} {
+	return v.([]interface{})
 }

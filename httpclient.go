@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/layeh/gopher-luar"
 	"github.com/yuin/gopher-lua"
+	"layeh.com/gopher-luar"
 )
 
 type httpRequestParam struct {

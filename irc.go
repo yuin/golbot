@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/layeh/gopher-luar"
 	"github.com/thoj/go-ircevent"
 	"github.com/yuin/gopher-lua"
+	"layeh.com/gopher-luar"
 )
 
 const ircChatClientTypeName = "ircChatClient"

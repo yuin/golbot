@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/layeh/gopher-luar"
 	"github.com/nlopes/slack"
 	"github.com/yuin/gopher-lua"
+	"layeh.com/gopher-luar"
 )
 
 const slackChatClientTypeName = "slackChatClient"

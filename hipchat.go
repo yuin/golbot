@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/daneharrigan/hipchat"
-	"github.com/layeh/gopher-luar"
 	"github.com/yuin/gopher-lua"
+	"layeh.com/gopher-luar"
 )
 
 const hipchatChatClientTypeName = "hipchatChatClient"

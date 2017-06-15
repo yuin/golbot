@@ -90,8 +90,8 @@ func (c *rocketRestClient) Login(email, password string) error {
 		return err
 	}
 	if res["status"].(string) == "success" {
-		c.authId = asObject(res["data"])["userId"].(string)
-		c.authToken = asObject(res["data"])["authToken"].(string)
+		c.authId = propertyPath(res, "data.userId").(string)
+		c.authToken = propertyPath(res, "data.authToken").(string)
 		return nil
 	}
 	return errors.New(fmt.Sprintf("Failed to Login as %s : %s", email, res["Status"].(string)))
@@ -248,14 +248,14 @@ func newRocketChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable)
 	}
 	u, err := url.Parse(surl)
 
-	abort := func(msg string) {
-		co.Logger.Printf("[ERROR] %s", msg)
-		os.Exit(1)
+	abortIfError := func(err error) {
+		if err != nil {
+			co.Logger.Printf("[ERROR] %s", err.Error())
+			os.Exit(1)
+		}
 	}
 
-	if err != nil {
-		abort(err.Error())
-	}
+	abortIfError(err)
 
 	if co.Logger == nil {
 		co.Logger = log.New(os.Stdout, "", log.Lshortfile|log.LstdFlags)
@@ -263,27 +263,22 @@ func newRocketChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable)
 
 	co.Logger.Printf("[INFO] login as %s(REST)", name)
 	restClient := newRocketRestClient(surl)
-	if err := restClient.Login(email, password); err != nil {
-		abort(err.Error())
-	}
+	err = restClient.Login(email, password)
+	abortIfError(err)
 
 	co.Logger.Printf("[INFO] connect to %s", u.Host)
 	realtimeClient, err := realtime.NewClient(u.Hostname(), u.Port(), false)
-	if err != nil {
-		abort(err.Error())
-	}
+	abortIfError(err)
+
 	co.Logger.Printf("[INFO] login as %s(Realtime)", name)
 	err = realtimeClient.Login(&api.UserCredentials{Email: email, Name: name, Password: password})
-	if err != nil {
-		abort(err.Error())
-	}
+	abortIfError(err)
 
 	c2id := map[string]string{}
 	co.Logger.Printf("[INFO] get available channel information")
 	allChannels, err := restClient.Call("/channels.list", httpRequestParam{Method: "GET"})
-	if err != nil {
-		abort(err.Error())
-	}
+	abortIfError(err)
+
 	for _, channel := range asArray(allChannels["channels"]) {
 		m := asObject(channel)
 		co.Logger.Printf("[INFO] %s(id:%s)", m["name"].(string), m["_id"].(string))
@@ -292,9 +287,8 @@ func newRocketChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable)
 
 	co.Logger.Printf("[INFO] get available group information")
 	allGroups, err := restClient.Call("/groups.list", httpRequestParam{Method: "GET"})
-	if err != nil {
-		abort(err.Error())
-	}
+	abortIfError(err)
+
 	for _, group := range asArray(allGroups["groups"]) {
 		m := asObject(group)
 		co.Logger.Printf("[INFO] %s(id:%s)", m["name"].(string), m["_id"].(string))
@@ -305,6 +299,16 @@ func newRocketChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable)
 		id2c[v] = k
 	}
 
-	chatClient := &rocketChatClient{realtimeClient, restClient, co, co.Logger, make(map[string][]*lua.LFunction), name, c2id, id2c, strings.Split(channels, ",")}
+	chatClient := &rocketChatClient{
+		realtimeClient: realtimeClient,
+		restClient:     restClient,
+		commonOption:   co,
+		logger:         co.Logger,
+		callbacks:      make(map[string][]*lua.LFunction),
+		name:           name,
+		c2id:           c2id,
+		id2c:           id2c,
+		channels:       strings.Split(channels, ","),
+	}
 	L.Push(newChatClient(L, rocketChatClientTypeName, chatClient, luar.New(L, chatClient.realtimeClient).(*lua.LUserData)))
 }

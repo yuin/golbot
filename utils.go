@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/yuin/gopher-lua"
@@ -104,4 +105,23 @@ func asObject(v interface{}) map[string]interface{} {
 
 func asArray(v interface{}) []interface{} {
 	return v.([]interface{})
+}
+
+func propertyPath(obj map[string]interface{}, path string) interface{} {
+	pathparts := strings.Split(path, ".")
+	var cur interface{}
+	cur = obj
+	for _, p := range pathparts {
+		pi := strings.Index(p, "[")
+		if pi > 0 {
+			pe := strings.Index(p, "]")
+			key := p[0:pi]
+			index, _ := strconv.Atoi(p[pi+1 : pe])
+			cur = (cur.(map[string]interface{}))[key]
+			cur = (cur.([]interface{}))[index]
+		} else {
+			cur = (cur.(map[string]interface{}))[p]
+		}
+	}
+	return cur
 }

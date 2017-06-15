@@ -8,7 +8,6 @@ Options:
   -g : Github OAuth token. (default : GITHUB_TOKEN env var)
   -i : ignore build errors
   -b : branch(default : master)
-  -s : install std
   -u : upload only
 EOF
   exit 1
@@ -55,7 +54,6 @@ cd "${SCRIPT_DIR}"
 : ${RELEASE_TAG:="snapshot"}
 : ${IGNORE_BUILD_ERROR:=0}
 : ${BRANCH:="master"}
-: ${INSTALL_STD:=0}
 : ${UPLOAD_ONLY:=0}
 
 while : ; do
@@ -67,9 +65,6 @@ while : ; do
       shift 1
     elif [[ "$1" =~ "u" ]]; then
       UPLOAD_ONLY=1
-      shift 1
-    elif [[ "$1" =~ "s" ]]; then
-      INSTALL_STD=1
       shift 1
     elif [[ "$1" =~ "t" ]]; then
       if [[ -z "$2" || "$2" =~ "^-+" ]]; then
@@ -130,19 +125,6 @@ GOX_OSARCHS=(`gox -osarch-list | grep 'true' | awk '{print $1}'`)
 IFS="${_OLD_IFS}"
 
 print-msg I "${_GO_VERSION}"
-if [ ${INSTALL_STD} = 1 ]; then
-  print-msg I "Install std libraries"
-  IFS='
-'
-  for _OSARCH in "${GOX_OSARCHS[@]}" ; do
-    _OS=$(echo ${_OSARCH} | sed -E 's!(.*)/(.*)!\1!g')
-    _ARCH=$(echo ${_OSARCH} | sed -E 's!(.*)/(.*)!\2!g')
-    print-msg I "${_SUDO} env GOOS=${_OS} GOARCH=${_ARCH} go install std"
-    ${_SUDO} env PATH="${PATH}" GOROOT="${GOROOT}" GOPATH="${GOPATH}" GOOS=${_OS} GOARCH=${_ARCH} go install std
-    [ $? -ne 0 ] && print-msg W "Failed to install std"
-  done
-fi
-
 if [ ${UPLOAD_ONLY} -eq 0 ]; then
   print-msg I "tag: ${RELEASE_TAG}"
   _OLD_BRANCH=$(git rev-parse --abbrev-ref HEAD)

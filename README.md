@@ -7,6 +7,7 @@ golbot is a Lua scriptable chat bot written in Go.
 - IRC
 - Slack
 - Hipchat
+- RocketChat
 
 ## Install
 
@@ -126,7 +127,7 @@ end
 
 - 1. requires golbot library.
 - 2. creates new bot.
-    - `#1` : chat type. currently supports `"IRC"`, `"Slack"` and `"Hipchat"`
+    - `#1` : chat type. currently supports `"IRC"`, `"Slack"`, `"Hipchat"` and `"Rocket"`
     - `#2` : options(including protocol specific) as a table 
         - Common options are:
             - `log` : 
@@ -232,6 +233,19 @@ function http(r)
 end
 ```
 
+## RocketChat
+
+golbot uses [gorocket](github.com/detached/gorocket) as a RocketChat client.
+
+- `golbot init rocket` generates a default lua config for RocketChat bots.
+- `golbot.newbot` creates new `*realtime.Client` (in `gorocket`)  object wrapped by gopher-luar, so `bot.raw` has same methods as `*realtime.Client` .
+- Protocol specific event object has same method as `*apl.Message`. 
+- Protocol specific options for `golbot.newbot` are:
+    - `url(string)` : RocketChat url
+    - `name(string)` : User name
+    - `email(string)` : User email
+    - `password(string)` : User password
+    - `channnels(string)` : Comma-separated channels to join such as "general,releasejobs" .
 
 
 ## Logging

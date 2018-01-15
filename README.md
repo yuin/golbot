@@ -197,6 +197,7 @@ golbot uses [hipchat](https://github.com/daneharrigan/hipchat) as a Hipchat XMPP
     - `password(string)` : password
     - `host(string)` : hostname like `"chat.hipchat.com"`.
     - `conf(string)` : conf hostname like `"conf.hipchat.com"`.
+    - `auth_type(string)` : authentication type. ( `"plain"` or `"oauth"` )
     - `room_jids(list of string)`: XMPP JIDs like `{"111111_xxxxx@conf.hipchat.com", "111111_yyyy@conf.hipchat.com"}`
 
 As described above golbot can also act as an HTTP(S) server, so you can use golbot as [your own integration](https://blog.hipchat.com/2015/02/11/build-your-own-integration-with-hipchat/) for Hipchat.

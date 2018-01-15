@@ -18,6 +18,7 @@ const hipchatDefaultConfigLua = `  myname = "golbot"
 	password = "password",
 	host = "chat.hipchat.com",
 	conf = "conf.hipchat.com",
+	auth_type = "plain",
 	room_jids = {"111111_xxxxx@conf.hipchat.com", "1111111_yyyyyy@conf.hipchat.com"},
     log = {"seelog", type="adaptive", mininterval="200000000", maxinterval="1000000000", critmsgcount="5",
       {"formats",
@@ -181,13 +182,16 @@ func newHipchatChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable
 	if len(resource) == 0 {
 		resource = "bot"
 	}
+	authType, _ := getStringField(L, opt, "auth_type")
+	if len(resource) == 0 {
+		authType = "plain"
+	}
 	roomJids := L.GetField(opt, "room_jids")
 
 	if co.Logger == nil {
 		co.Logger = log.New(os.Stdout, "", log.Lshortfile|log.LstdFlags)
 	}
-	// hipchatobj, err := hipchat.NewClientWithServerInfo(user, password, resource, host, conf)
-	hipchatobj, err := hipchat.NewClient(user, password, resource)
+	hipchatobj, err := hipchat.NewClient(user, password, resource, authType)
 	if err != nil {
 		co.Logger.Printf("[ERROR] %s", err.Error())
 		os.Exit(1)

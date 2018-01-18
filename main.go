@@ -315,13 +315,20 @@ func newLuaState(conf string) *lua.LState {
 	L.SetField(mod, "cmain", lua.LChannel(luaMainChan))
 	L.SetField(mod, "cworker", lua.LChannel(luaWorkerChan))
 	proxyLuar(L, MessageEvent{}, nil)
+	proxyLuar(L, &MessageEvent{}, nil)
 	proxyLuar(L, log.Logger{}, nil)
+	proxyLuar(L, &log.Logger{}, nil)
 	proxyLuar(L, url.Values{}, nil)
+	proxyLuar(L, &url.Values{}, nil)
 	proxyLuar(L, url.Userinfo{}, nil)
+	proxyLuar(L, &url.Userinfo{}, nil)
 	proxyLuar(L, url.URL{}, nil)
+	proxyLuar(L, &url.URL{}, nil)
 	proxyLuar(L, http.Cookie{}, nil)
+	proxyLuar(L, &http.Cookie{}, nil)
 	proxyLuar(L, http.Header{}, nil)
-	proxyLuar(L, http.Request{}, func(L *lua.LState, key string) bool {
+	proxyLuar(L, &http.Header{}, nil)
+	proxyLuar(L, &http.Request{}, func(L *lua.LState, key string) bool {
 		if key == "readbody" || key == "ReadBody" {
 			L.Push(L.NewFunction(func(L *lua.LState) int {
 				r := L.CheckUserData(1).Value.(*http.Request)

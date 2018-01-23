@@ -87,6 +87,7 @@ end
 
 var luaMainChan chan lua.LValue
 var luaWorkerChan chan lua.LValue
+var logChan chan []interface{}
 
 var mainL *lua.LState
 var mutex sync.Mutex
@@ -144,6 +145,17 @@ func startCrons(co *CommonClientOption) {
 		c.AddJob(entry.Spec, &cronJob{entry.FuncName, co.Logger, co.ConfFile})
 	}
 	c.Start()
+}
+
+func startLog(co *CommonClientOption) {
+	go func() {
+		for {
+			select {
+			case v := <-logChan:
+				co.Logger.Printf(v[0].(string), v[1:]...)
+			}
+		}
+	}()
 }
 
 func startHttpServer(co *CommonClientOption) {
@@ -366,7 +378,9 @@ func newLuaState(conf string) *lua.LState {
 		go func() {
 			L := newLuaState(conf)
 			pushN(L, L.GetGlobal("worker"), <-luaWorkerChan)
-			L.PCall(1, 0, nil)
+			if err := L.PCall(1, 0, nil); err != nil {
+				logChan <- []interface{}{"[ERROR] %s", err.Error()}
+			}
 		}()
 		luaWorkerChan <- L.CheckAny(1)
 		return 0
@@ -471,6 +485,7 @@ Commands:
 
 	luaMainChan = make(chan lua.LValue)
 	luaWorkerChan = make(chan lua.LValue)
+	logChan = make(chan []interface{})
 	mainL := newLuaState(optConfFile)
 	mainL.Push(mainL.GetGlobal("main"))
 	mainL.Call(0, 0)

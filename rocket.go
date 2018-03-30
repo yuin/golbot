@@ -228,13 +228,6 @@ func (client *rocketChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 
 func registerRocketChatClientType(L *lua.LState) {
 	registerChatClientType(L, rocketChatClientTypeName)
-	proxyLuar(L, realtime.Client{}, nil)
-	proxyLuar(L, api.Channel{}, nil)
-	proxyLuar(L, api.Info{}, nil)
-	proxyLuar(L, api.Message{}, nil)
-	proxyLuar(L, rocketMessage{}, nil)
-	proxyLuar(L, api.User{}, nil)
-	proxyLuar(L, api.UserCredentials{}, nil)
 }
 
 func newRocketChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable) {

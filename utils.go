@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/yuin/gopher-lua"
 	"layeh.com/gopher-luar"
@@ -30,10 +31,6 @@ func getNumberField(L *lua.LState, t lua.LValue, key string) (float64, bool) {
 		return float64(n), true
 	}
 	return 0, false
-}
-
-func toCamel(s string) string {
-	return strings.Replace(strings.Title(strings.Replace(s, "_", " ", -1)), " ", "", -1)
 }
 
 func luaToXml(lvalue lua.LValue) string {
@@ -71,24 +68,31 @@ func _luaToXml(lvalue lua.LValue, buf []string) []string {
 	return buf
 }
 
-func proxyLuar(L *lua.LState, tp interface{}, methods func(*lua.LState, string) bool) {
+func addLuaMethod(L *lua.LState, tp interface{}, methods func(*lua.LState, string) bool) {
 	mt := luar.MT(L, tp)
-	newIndexFn := mt.RawGetString("__newindex")
 	indexFn := mt.RawGetString("__index")
-	mt.RawSetString("__newindex", L.NewFunction(func(L *lua.LState) int {
-		pushN(L, newIndexFn, L.Get(1), lua.LString(toCamel(L.CheckString(2))), L.Get(3))
-		L.Call(3, 0)
-		return 0
-	}))
-
 	mt.RawSetString("__index", L.NewFunction(func(L *lua.LState) int {
 		key := L.CheckString(2)
 		if methods == nil || !methods(L, key) {
-			pushN(L, indexFn, L.Get(1), lua.LString(toCamel(key)))
+			pushN(L, indexFn, L.Get(1), lua.LString(key))
 			L.Call(2, 1)
 		}
 		return 1
 	}))
+}
+
+func toSnakeCase(in string) string {
+	runes := []rune(in)
+
+	var out []rune
+	for i := 0; i < len(runes); i++ {
+		if i > 0 && (unicode.IsUpper(runes[i]) || unicode.IsNumber(runes[i])) && ((i+1 < len(runes) && unicode.IsLower(runes[i+1])) || unicode.IsLower(runes[i-1])) {
+			out = append(out, '_')
+		}
+		out = append(out, unicode.ToLower(runes[i]))
+	}
+
+	return string(out)
 }
 
 func mustDecodeJson(data []byte) map[string]interface{} {

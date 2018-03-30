@@ -158,10 +158,6 @@ func (client *hipchatChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 
 func registerHipchatChatClientType(L *lua.LState) {
 	registerChatClientType(L, hipchatChatClientTypeName)
-	proxyLuar(L, hipchat.Client{}, nil)
-	proxyLuar(L, hipchat.Message{}, nil)
-	proxyLuar(L, hipchat.User{}, nil)
-	proxyLuar(L, hipchat.Room{}, nil)
 }
 
 func newHipchatChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable) {

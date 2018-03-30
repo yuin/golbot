@@ -136,8 +136,6 @@ func (client *ircChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 
 func registerIRCChatClientType(L *lua.LState) {
 	registerChatClientType(L, ircChatClientTypeName)
-	proxyLuar(L, irc.Connection{}, nil)
-	proxyLuar(L, irc.Event{}, nil)
 }
 
 func newIRCChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable) {

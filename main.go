@@ -6,8 +6,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -257,6 +257,12 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func newLuaState(conf string) *lua.LState {
 	L := lua.NewState()
+	luar.GetConfig(L).FieldNames = func(s reflect.Type, f reflect.StructField) []string {
+		return []string{toSnakeCase(f.Name)}
+	}
+	luar.GetConfig(L).MethodNames = func(s reflect.Type, m reflect.Method) []string {
+		return []string{toSnakeCase(m.Name)}
+	}
 
 	registerIRCChatClientType(L)
 	registerSlackChatClientType(L)
@@ -326,21 +332,7 @@ func newLuaState(conf string) *lua.LState {
 	})
 	L.SetField(mod, "cmain", lua.LChannel(luaMainChan))
 	L.SetField(mod, "cworker", lua.LChannel(luaWorkerChan))
-	proxyLuar(L, MessageEvent{}, nil)
-	proxyLuar(L, &MessageEvent{}, nil)
-	proxyLuar(L, log.Logger{}, nil)
-	proxyLuar(L, &log.Logger{}, nil)
-	proxyLuar(L, url.Values{}, nil)
-	proxyLuar(L, &url.Values{}, nil)
-	proxyLuar(L, url.Userinfo{}, nil)
-	proxyLuar(L, &url.Userinfo{}, nil)
-	proxyLuar(L, url.URL{}, nil)
-	proxyLuar(L, &url.URL{}, nil)
-	proxyLuar(L, http.Cookie{}, nil)
-	proxyLuar(L, &http.Cookie{}, nil)
-	proxyLuar(L, http.Header{}, nil)
-	proxyLuar(L, &http.Header{}, nil)
-	proxyLuar(L, &http.Request{}, func(L *lua.LState, key string) bool {
+	addLuaMethod(L, &http.Request{}, func(L *lua.LState, key string) bool {
 		if key == "readbody" || key == "ReadBody" {
 			L.Push(L.NewFunction(func(L *lua.LState) int {
 				r := L.CheckUserData(1).Value.(*http.Request)

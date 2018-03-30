@@ -186,11 +186,6 @@ func (client *slackChatClient) Serve(L *lua.LState, fn *lua.LFunction) {
 
 func registerSlackChatClientType(L *lua.LState) {
 	registerChatClientType(L, slackChatClientTypeName)
-	proxyLuar(L, slack.RTM{}, nil)
-	proxyLuar(L, slack.Client{}, nil)
-	for _, v := range eventMapping {
-		proxyLuar(L, v, nil)
-	}
 }
 
 func newSlackChatClient(L *lua.LState, co *CommonClientOption, opt *lua.LTable) {
